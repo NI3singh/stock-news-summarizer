@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial News Aggregator - AI-Powered Summaries</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .ticker-item:hover {
+            background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+        }
+        .loading {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .article-card {
+            transition: all 0.3s ease;
+        }
+        .article-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold flex items-center gap-3">
+                        <i class="fas fa-chart-line"></i>
+                        Financial News Aggregator
+                    </h1>
+                    <p class="text-blue-100 mt-1">AI-Powered Daily Summaries for Traders</p>
+                </div>
+                <button onclick="refreshAll()" 
+                        class="bg-white text-blue-600 px-6 py-2 rounded-lg hover:bg-blue-50 transition font-semibold flex items-center gap-2">
+                    <i class="fas fa-sync-alt"></i>
+                    Refresh All
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            
+            <!-- Right Sidebar - Tickers -->
+            <div class="lg:col-span-1 order-1 lg:order-2">
+                <div class="bg-white rounded-lg shadow-md p-6 sticky top-4">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <i class="fas fa-list"></i>
+                        My Tickers
+                    </h2>
+                    
+                    <!-- Add Ticker Form -->
+                    <div class="mb-4">
+                        <div class="flex gap-2">
+                            <input type="text" 
+                                   id="newTickerInput" 
+                                   placeholder="e.g., AAPL" 
+                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase"
+                                   onkeypress="handleTickerKeyPress(event)">
+                            <button onclick="addTicker()" 
+                                    class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tickers List -->
+                    <div id="tickersList" class="space-y-2">
+                        <p class="text-gray-500 text-sm text-center py-8">
+                            <i class="fas fa-info-circle"></i>
+                            Add a ticker to get started
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content Area -->
+            <div class="lg:col-span-3 order-2 lg:order-1">
+                
+                <!-- Welcome Message -->
+                <div id="welcomeMessage" class="bg-white rounded-lg shadow-md p-8 text-center">
+                    <i class="fas fa-newspaper text-6xl text-blue-600 mb-4"></i>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Welcome to Financial News Aggregator</h2>
+                    <p class="text-gray-600 mb-6">
+                        Get AI-powered summaries from TradingView, Finviz, and Polygon API
+                    </p>
+                    <div class="flex justify-center gap-4 text-sm text-gray-500">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-check-circle text-green-500"></i>
+                            <span>3 Data Sources</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-robot text-blue-500"></i>
+                            <span>AI Summaries</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-clock text-purple-500"></i>
+                            <span>Daily Updates</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Summary Display -->
+                <div id="summaryContainer" class="hidden">
+                    <!-- Latest Summary -->
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6 fade-in">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                                <i class="fas fa-file-alt text-blue-600"></i>
+                                <span id="currentTicker"></span>
+                            </h2>
+                            <span id="summaryDate" class="text-sm text-gray-500"></span>
+                        </div>
+                        
+                        <!-- What Changed Today -->
+                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                            <h3 class="font-bold text-yellow-800 mb-2 flex items-center gap-2">
+                                <i class="fas fa-bolt"></i>
+                                What Changed Today
+                            </h3>
+                            <p id="whatChanged" class="text-gray-700"></p>
+                        </div>
+                        
+                        <!-- Main Summary -->
+                        <div class="prose max-w-none">
+                            <h3 class="text-lg font-bold text-gray-800 mb-3">Daily Summary</h3>
+                            <div id="mainSummary" class="text-gray-700 leading-relaxed"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Source Articles -->
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <i class="fas fa-newspaper"></i>
+                            Source Articles Used
+                        </h3>
+                        <div id="articlesUsed" class="space-y-3"></div>
+                    </div>
+                    
+                    <!-- Historical Summaries -->
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <i class="fas fa-history"></i>
+                            7-Day History
+                        </h3>
+                        <div id="historicalSummaries" class="space-y-4"></div>
+                    </div>
+                </div>
+                
+                <!-- Loading State -->
+                <div id="loadingState" class="hidden bg-white rounded-lg shadow-md p-8 text-center">
+                    <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
+                    <p class="text-gray-600">Loading data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
