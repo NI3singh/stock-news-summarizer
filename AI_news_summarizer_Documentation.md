@@ -1,3 +1,125 @@
+### 📄 c:\Users\itsni\Desktop\AI_news_summarizer\requirements.txt
+*Saved at: 10/3/2025, 11:00:07 AM*
+
+**[REMOVED]**
+```
+(from line ~1)
+Flask==3.0.0
+
+```
+**[ADDED]**
+```
+1     APScheduler==3.10.4
+2     attrs==25.3.0
+```
+**[REMOVED]**
+```
+(from line ~4)
+requests==2.31.0
+selenium==4.15.2
+
+```
+**[ADDED]**
+```
+4     blinker==1.9.0
+5     cachetools==5.3.2
+6     certifi==2025.8.3
+7     cffi==2.0.0
+8     charset-normalizer==3.4.3
+9     click==8.3.0
+10    colorama==0.4.6
+11    exceptiongroup==1.3.0
+12    fake-useragent==1.4.0
+13    Flask==3.0.0
+14    google-ai-generativelanguage==0.4.0
+15    google-api-core==2.25.1
+16    google-auth==2.41.1
+```
+**[REMOVED]**
+```
+(from line ~18)
+APScheduler==3.10.4
+
+```
+**[ADDED]**
+```
+18    googleapis-common-protos==1.70.0
+19    grpcio==1.75.1
+20    grpcio-status==1.62.3
+21    gunicorn==21.2.0
+22    h11==0.16.0
+23    idna==3.10
+24    itsdangerous==2.2.0
+25    Jinja2==3.1.6
+26    lxml
+27    MarkupSafe==3.0.3
+28    outcome==1.3.0.post0
+29    packaging==25.0
+30    proto-plus==1.26.1
+31    protobuf==4.25.8
+32    pyasn1==0.6.1
+33    pyasn1_modules==0.4.2
+34    pycparser==2.23
+35    PySocks==1.7.1
+```
+**[REMOVED]**
+```
+(from line ~37)
+lxml==4.9.3
+
+```
+**[REMOVED]**
+```
+(from line ~38)
+gunicorn==21.2.0
+
+```
+**[ADDED]**
+```
+38    requests==2.31.0
+39    rsa==4.9.1
+40    selenium==4.15.2
+41    six==1.17.0
+42    sniffio==1.3.1
+43    sortedcontainers==2.4.0
+44    soupsieve==2.8
+45    tqdm==4.67.1
+46    trio==0.31.0
+47    trio-websocket==0.12.2
+48    typing_extensions==4.15.0
+49    tzdata==2025.2
+50    tzlocal==5.3.1
+51    urllib3==2.5.0
+```
+**[REMOVED]**
+```
+(from line ~53)
+fake-useragent==1.4.0
+cachetools==5.3.2
+```
+**[ADDED]**
+```
+53    Werkzeug==3.1.3
+54    wsproto==1.2.0
+```
+
+---
+
+### 📄 c:\Users\itsni\Desktop\AI_news_summarizer\runtime.txt
+*Saved at: 10/3/2025, 10:59:00 AM*
+
+**[REMOVED]**
+```
+(from line ~1)
+python-3.10.11
+```
+**[ADDED]**
+```
+1     python-3.11.9
+```
+
+---
+
 ### 📄 c:\Users\itsni\Desktop\AI_news_summarizer\runtime.txt
 *Saved at: 10/3/2025, 10:52:59 AM*
 
