@@ -45,7 +45,7 @@ A comprehensive, cost-effective solution that automatically aggregates financial
 | Gemini Pro API | Free Tier | $0 | 60 requests/minute |
 | Polygon API | Free Tier | $0 | 5 calls/minute |
 | Render.com | Free Tier | $0 | 750 hours/month |
-| **TOTAL** | | **$0/month** | **Well under $5 budget** |
+| **TOTAL** | | **$0/month** | **$0 *currrently** |
 
 ### Cost Optimization Strategies
 1. Uses free tier APIs with generous limits
@@ -66,8 +66,8 @@ A comprehensive, cost-effective solution that automatically aggregates financial
 
 1. **Clone Repository**
 ```bash
-git clone <your-repo-url>
-cd financial-news-aggregator
+git clone https://github.com/NI3singh/stock-news-summarizer.git
+cd stock-news-summarizer
 ```
 
 2. **Create Virtual Environment**
@@ -196,65 +196,7 @@ financial-news-aggregator/
 
 ## 🚀 Deployment
 
-### Deploy to Render.com (FREE)
-
-1. **Create Render Account**: https://render.com
-
-2. **Create New Web Service**
-   - Connect your GitHub repository
-   - Select "Python" environment
-
-3. **Configure Build Settings**
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `gunicorn app:app`
-
-4. **Add Environment Variables**
-   ```
-   GEMINI_API_KEY=your_key
-   POLYGON_API_KEY=your_key
-   FLASK_SECRET_KEY=random_secret
-   REFRESH_TIME=08:00
-   TIMEZONE=Asia/Kolkata
-   ```
-
-5. **Deploy**: Click "Create Web Service"
-
-6. **Access Your App**: `https://your-app.onrender.com`
-
-### Deploy to Railway.app (FREE)
-
-1. **Create Railway Account**: https://railway.app
-
-2. **New Project** → **Deploy from GitHub**
-
-3. **Add Environment Variables** (same as above)
-
-4. **Deploy**: Automatic deployment on push
-
-## 🧪 Testing
-
-### Test Scrapers
-```python
-from scrapers import ScraperOrchestrator
-
-scraper = ScraperOrchestrator()
-articles = scraper.scrape_all_sources('AAPL')
-print(f"Found {len(articles)} articles")
-```
-
-### Test AI Processing
-```python
-from ai.gemini_processor import GeminiProcessor
-
-processor = GeminiProcessor()
-selected = processor.select_top_articles(articles, 'AAPL')
-summary, changed = processor.generate_summary(selected, 'AAPL')
-```
-
-### Test Manual Refresh
-```bash
-curl -X POST http://localhost:5000/api/refresh/AAPL
-```
+### Deployed on Render.com (FREE)
 
 ## 📊 Performance Metrics
 
@@ -270,26 +212,6 @@ curl -X POST http://localhost:5000/api/refresh/AAPL
 - Storage: ~1-2 MB per ticker per month
 - Bandwidth: ~5-10 MB per ticker daily
 
-## 🛡️ Error Handling
-
-### Implemented Safeguards
-- **Rate Limiting**: Prevents API quota exhaustion
-- **Retry Logic**: Automatic retries on failures
-- **Graceful Degradation**: Continues with available data
-- **User Notifications**: Clear error messages
-- **Logging**: Comprehensive error logging
-
-### Common Issues & Solutions
-
-**Issue**: "Gemini API rate limit reached"
-- **Solution**: Wait 1 minute, API resets automatically
-
-**Issue**: "No articles found for ticker"
-- **Solution**: Verify ticker symbol, try popular stocks first
-
-**Issue**: "Polygon API error 429"
-- **Solution**: Free tier limited to 5 calls/minute
-
 ## 📈 Future Enhancements
 
 ### Planned Features
@@ -298,7 +220,6 @@ curl -X POST http://localhost:5000/api/refresh/AAPL
 - [ ] Sentiment analysis scores
 - [ ] Price chart integration
 - [ ] Export summaries to PDF
-- [ ] Mobile app
 - [ ] Multi-user support with authentication
 
 ### Contribution Ideas
@@ -327,6 +248,10 @@ For issues, questions, or contributions:
 
 ---
 
+<div align="center">
+
 **Built with ❤️ for traders and investors**
 
 **Star ⭐ this repo if you find it useful!**
+
+</div>
