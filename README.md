@@ -1,4 +1,4 @@
-# 📈 Financial News Aggregator - AI-Powered Stock Market Summaries
+# 📈 Stock News Summarizer - AI-Powered Stock Market Summaries
 
 A comprehensive, cost-effective solution that automatically aggregates financial news from multiple sources and generates intelligent AI summaries using Google's Gemini Pro. Designed for traders and investors who need quick, actionable insights.
 
