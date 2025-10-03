@@ -1,3 +1,20 @@
+### 📄 c:\Users\itsni\Desktop\AI_news_summarizer\app.py
+*Saved at: 10/3/2025, 11:12:33 AM*
+
+**[REMOVED]**
+```
+(from line ~159)
+    app.run(host='0.0.0.0', port=5000, debug=Config.DEBUG)
+```
+**[ADDED]**
+```
+159       import os
+160       port = int(os.getenv('PORT', 5000))
+161       app.run(host='0.0.0.0', port=port, debug=Config.DEBUG)
+```
+
+---
+
 ### 📄 c:\Users\itsni\Desktop\AI_news_summarizer\requirements.txt
 *Saved at: 10/3/2025, 11:00:07 AM*
 
