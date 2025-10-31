@@ -178,3 +178,36 @@ a {
 a:hover {
     color: #93c5fd;
 }
+
+#notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 9999;
+}
+
+.notification {
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    padding: 12px 18px;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    min-width: 220px;
+}
+
+.notification.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Colors */
+.notification.info { background-color: #3b82f6; }    /* blue */
+.notification.success { background-color: #10b981; } /* green */
+.notification.warning { background-color: #f59e0b; } /* yellow */
+.notification.error { background-color: #ef4444; }   /* red */
