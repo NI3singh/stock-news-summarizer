@@ -25,7 +25,7 @@ class Config:
     RATE_LIMIT_DELAY = 2  # seconds between requests
     
     # AI Settings
-    GEMINI_MODEL = 'gemini-2.0-flash-exp'
+    GEMINI_MODEL = 'gemini-2.5-flash-lite-preview-09-2025'
     MAX_ARTICLES_TO_SELECT = 7
     SUMMARY_MAX_WORDS = 500
     
