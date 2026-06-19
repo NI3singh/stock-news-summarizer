@@ -51,3 +51,7 @@ include = ["quantmind*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["quantmind/tests"]
+markers = [
+    "live: live tests that call real external APIs (deselected by default; run with -m live)",
+]
+addopts = "-m 'not live'"
