@@ -5,6 +5,7 @@ __pycache__/
 *.so
 .Python
 venv/
+.venv/
 ainews-agent/
 env/
 ENV/
@@ -32,3 +33,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# QuantMind v2
+quantmind_chroma/
+quantmind.db
+logs/

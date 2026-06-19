@@ -1,0 +1,48 @@
+# QuantMind v2 — packaging / dependency manifest
+# NOTE (Step 1.2): build-backend corrected to the valid PEP 517 backend
+# "setuptools.build_meta". The originally specified
+# "setuptools.backends.legacy:build" is not a real backend and breaks `pip install`.
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantmind"
+version = "2.0.0"
+description = "Multi-agent quantitative news intelligence system"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    "crawl4ai>=0.4.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "loguru>=0.7.0",
+    "chromadb>=0.5.0",
+    "aiosqlite>=0.20.0",
+    "google-generativeai>=0.8.0",
+    "yfinance>=0.2.40",
+    "pandas>=2.2.0",
+    "pandas-ta>=0.3.14b",
+    "apscheduler>=3.10.0",
+    "pytz>=2024.1",
+    "fake-useragent>=1.5.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quantmind*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["quantmind/tests"]
