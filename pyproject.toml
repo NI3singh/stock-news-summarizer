@@ -30,6 +30,11 @@ dependencies = [
     "pytz>=2024.1",
     "fake-useragent>=1.5.0",
     "python-dotenv>=1.0.0",
+    # LLM client layer — provider-agnostic LangChain factory (Phase 2)
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-anthropic>=0.3.0",
 ]
 
 [project.optional-dependencies]

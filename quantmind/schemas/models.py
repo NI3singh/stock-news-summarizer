@@ -4,7 +4,7 @@ The single source of truth for the system's data shapes: every other module
 imports its types from here. Models are defined in dependency order — later
 models reference earlier ones, so the ordering must be preserved.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -60,7 +60,7 @@ class QuantAnalysis(BaseModel):
 
 class TickerAnalysis(BaseModel):
     ticker: str
-    analyzed_at: datetime = Field(default_factory=datetime.utcnow)
+    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     news: NewsAnalysis
     quant: QuantAnalysis | None = None
     memory: MemoryContext

@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     db_path: str = "./quantmind.db"
     max_concurrent_tickers: int = 3
 
+    # LLM client configuration (consumed by the quantmind.llm factory; env-overridable).
+    llm_provider: str = "google"
+    deep_think_llm: str = "gemini-2.5-flash"
+    quick_think_llm: str = "gemini-2.5-flash-lite"
+    backend_url: str | None = None              # custom OpenAI-compatible endpoint; None = provider default
+    google_thinking_level: str | None = None    # Gemini thinking level ("high"/"low"/...)
+    openai_reasoning_effort: str | None = None  # OpenAI reasoning effort ("low"/"medium"/"high")
+    anthropic_effort: str | None = None         # Anthropic extended-thinking effort
+    temperature: float | None = None            # cross-provider; None = provider default
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
