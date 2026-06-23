@@ -37,11 +37,16 @@ class VectorStore:
         ids: list[str] = []
         documents: list[str] = []
         metadatas: list[dict] = []
+        seen: set[str] = set()  # ChromaDB upsert requires ids unique WITHIN a call
         for article in articles:
             # Skip only if there is genuinely nothing to embed.
             if not article.content and not article.title:
                 continue
-            ids.append(hashlib.md5(article.url.encode()).hexdigest())
+            article_id = hashlib.md5(article.url.encode()).hexdigest()
+            if article_id in seen:  # same URL twice in one batch -> keep the first
+                continue
+            seen.add(article_id)
+            ids.append(article_id)
             documents.append(
                 article.content if len(article.content) > 20 else article.title
             )
