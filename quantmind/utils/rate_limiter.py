@@ -20,11 +20,24 @@ class AsyncRateLimiter:
         self.calls_per_second = calls_per_second
         self.calls_per_minute = calls_per_minute
         self._calls: deque[float] = deque(maxlen=calls_per_minute)
-        self._lock = asyncio.Lock()
+        # The lock is created lazily and rebound per running loop: an asyncio.Lock
+        # binds to the first loop it's used on and raises if reused from another
+        # (the scheduler runs each daily job on a fresh event loop). Only the lock
+        # is per-loop; the rate-limit state (_calls) is plain data shared across loops.
+        self._lock: asyncio.Lock | None = None
+        self._lock_loop: asyncio.AbstractEventLoop | None = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Return a lock bound to the current running loop (recreate if it changed)."""
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
+        return self._lock
 
     async def acquire(self) -> None:
         """Block until a call is permitted under both limits, then record it."""
-        async with self._lock:
+        async with self._get_lock():
             min_interval = 1.0 / self.calls_per_second
             now = time.monotonic()
 

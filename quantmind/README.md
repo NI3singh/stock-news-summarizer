@@ -1,0 +1,163 @@
+# QuantMind v2 — Multi-Agent Quantitative News Intelligence
+
+QuantMind v2 turns a watchlist of tickers into structured, explainable trading intelligence. For each ticker it concurrently scrapes four news sources, retrieves what it learned on prior runs, and runs a team of specialized async agents — news, quantitative (price/technical), and memory — whose outputs a coordinator fuses into a single typed `TickerAnalysis` with a human-readable synthesis. Where the original app was a synchronous Flask script that pulled three sources and asked Gemini for one daily summary, v2 is a fully async, end-to-end **typed** pipeline with a real agent architecture, persistent vector memory (so each run is informed by the last), a provider-agnostic LLM layer, and a clean CLI.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  DATA SOURCES                                                          │
+│  Polygon API   ·   Finviz   ·   TradingView   ·   SEC EDGAR           │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  (4 sources, concurrent)
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  ASYNC SCRAPER ORCHESTRATOR                                            │
+│  BaseScraper (httpx + rate limiter) · TradingView via crawl4ai        │
+│  asyncio.gather + per-source timeout + URL/title dedup                 │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  list[Article]
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  AGENT LAYER  (custom BaseAgent framework)                            │
+│                                                                        │
+│        MemoryAgent ──► MemoryContext ──┐                              │
+│                                         ├─► OrchestratorAgent ─► Synthesis
+│        NewsAgent  ┐                     │       (fuses all 3)          │
+│                   ├─(asyncio.gather)────┘                              │
+│        QuantAgent ┘                                                    │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  TickerAnalysis (typed)
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  SUPPORT LAYER                                                         │
+│  GeminiClient (retry/rate-limit) · provider-agnostic LLM factory      │
+│  DatabaseManager (aiosqlite) · VectorStore (ChromaDB) · Settings · log │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  persist + index (closes RAG loop)
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  PIPELINE / CLI                                                        │
+│  PipelineRunner (shared resources, semaphore) · DailyScheduler         │
+│  main.py — analyze · add-ticker · remove-ticker · list-tickers · run-scheduler
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## Tech Stack
+
+| Component | Technology | Why This Choice |
+|---|---|---|
+| HTTP client | **httpx** | Async-native; replaces blocking `requests` so all four sources fetch concurrently. |
+| Web scraping | **crawl4ai** | Drives a headless browser to render the JS-heavy pages TradingView requires (plain HTTP returns an empty shell). |
+| AI validation | **Pydantic v2** | End-to-end typed pipeline — agents pass validated models, never raw dicts; bad LLM output fails loudly at the boundary. |
+| Config | **pydantic-settings** | Validates secrets at startup (fail-fast with a clear message) instead of failing silently on the first API call. |
+| Logging | **loguru** | Structured, colored, rotating file logs — replaces `print()` and ad-hoc logging config. |
+| Vector memory | **ChromaDB** | Local persistent embeddings for RAG; no external server or API to run. |
+| Async DB | **aiosqlite** | Non-blocking SQLite using only portable SQL (no SQLite-only functions) so it can migrate to PostgreSQL. |
+| Agent framework | **Custom (`BaseAgent`)** | ~100 lines of explicit, inspectable agent internals (timing, logging, error capture) vs. the opaque magic of CrewAI/AutoGen. |
+| LLM | **Gemini 2.5 Flash Lite** | Structured output (validated objects, no string parsing), strong quality, generous free tier; pluggable via a provider-agnostic factory (OpenAI/Anthropic/etc.). |
+| Concurrency | **asyncio.gather** | 4 sources scraped concurrently (~12s) instead of sequentially (~30s); multiple tickers analyzed under a semaphore. |
+
+## Design Decisions
+
+**1. Custom agent framework over CrewAI / AutoGen.** Agent frameworks hide the control flow that matters most here — when each agent runs, what context it sees, how failures propagate. A ~100-line `BaseAgent` (an `execute()` wrapper that times the run, logs it to the DB, and converts any exception into a typed failure result that never crashes the pipeline) makes all of that explicit and debuggable. The orchestration ("memory first, then news + quant in parallel, then one synthesis call") is plain `asyncio`, not a DSL.
+
+**2. ChromaDB vector memory, not just SQL history.** SQL can tell you *that* a ticker was analyzed before; it can't tell you *which past events resemble today's news*. The Memory Agent embeds prior articles in ChromaDB and retrieves the semantically closest ones, so the synthesis can say "this echoes the supply-chain concern from last week." SQL still stores the structured analyses (for the sentiment-trend and recency signals); the two are complementary.
+
+**3. All scrapers concurrent with `asyncio.gather`.** The four sources are independent I/O-bound calls, so running them sequentially just adds their latencies. `gather` overlaps them, and each is wrapped in an isolated task with its own timeout — one slow or failing source (e.g. the browser-based TradingView crawl) can't abort the others or blow the latency budget.
+
+**4. Pydantic for everything.** Every boundary — a scraped `Article`, an agent's `AgentResult`, the final `TickerAnalysis` — is a validated Pydantic model. This means an agent literally cannot pass a malformed object downstream, the LLM's structured output is validated on arrival, and the whole pipeline is autocomplete-friendly and self-documenting. Typing the pipeline end-to-end turns a class of silent runtime bugs into loud, located errors.
+
+**5. `generate_structured()` instead of prompt-parsing hacks.** Rather than asking the model for JSON and then regex-stripping markdown fences and `json.loads`-ing the result (brittle, and a frequent source of production failures), the LLM client uses structured output (`with_structured_output(schema)` over the provider factory, backed by Gemini's response-schema support). The model returns a *validated Pydantic instance directly* — there is no string parsing anywhere in the pipeline.
+
+## Quick Start
+
+```bash
+# 1. Clone and check out the branch
+git clone <repo-url> && cd stock-news-summarizer
+git checkout v2-multiagent
+
+# 2. Install (editable, with dev/test extras) into a Python 3.13 venv
+pip install -e ".[dev]"
+
+# 3. Configure secrets
+cp .env.example .env            # then fill in GEMINI_API_KEY and POLYGON_API_KEY
+
+# 4. Run your first analysis
+python quantmind/main.py analyze AAPL
+```
+
+## CLI Reference
+
+```bash
+quantmind <command> [args]      # or: python quantmind/main.py <command> [args]
+```
+
+**`analyze TICKERS...`** — run the full pipeline for one or more tickers.
+```
+$ python quantmind/main.py analyze AAPL
+────────────────────────────────────────────────────────────
+TICKER: AAPL  |  2026-06-23 06:01
+Sentiment: +0.30  |  Days of History: 1
+Themes: Intel-Apple Chip Collaboration, Rising Memory Chip Costs, AI Strategy, ...
+
+WHAT CHANGED:
+The primary new development is the reported agreement between Apple and Intel ...
+
+SYNTHESIS:
+Apple's stock is currently influenced by a confluence of strategic advancements
+and immediate cost pressures ... a bearish MACD crossover ... For a trader
+monitoring AAPL, the key takeaway is to watch for confirmation of the Intel
+partnership ...
+
+SIGNALS: RSI=49.25  MACD=1.20  Vol Ratio=0.85
+────────────────────────────────────────────────────────────
+```
+
+**`add-ticker SYMBOL`** — add a ticker to the watchlist.
+```
+$ python quantmind/main.py add-ticker NVDA
+Added NVDA to watchlist
+```
+
+**`remove-ticker SYMBOL`** — remove (soft-delete) a ticker from the watchlist.
+```
+$ python quantmind/main.py remove-ticker NVDA
+Removed NVDA from watchlist
+```
+
+**`list-tickers`** — show active tickers and when each was last analyzed.
+```
+$ python quantmind/main.py list-tickers
+Active tickers:
+  AAPL  (last analyzed: 2026-06-23 06:08)
+```
+
+**`run-scheduler`** — analyze the whole watchlist now, then start the daily cron refresh.
+```
+$ python quantmind/main.py run-scheduler
+Running initial analysis for 3 tickers before starting scheduler...
+Scheduler running. Daily refresh at 08:00 Asia/Kolkata
+Press Ctrl+C to stop.
+```
+
+## Performance
+
+Measured on live runs (free-tier Gemini, single developer machine):
+
+| Operation | Time | Notes |
+|---|---|---|
+| Scraping (4 sources, concurrent) | **~12s** / ticker | Polygon + Finviz productive (~45 articles); TradingView/EDGAR selectors are known follow-ups. |
+| Full single-ticker analysis | **~32s** | Scrape → memory → news + quant → synthesis → persist. |
+| 3-ticker concurrent batch | **~58s** | vs. ~96s if run sequentially → **~40% faster**. Not 3× because the shared LLM rate limiter (0.9 calls/s) serializes the model calls; the scrapes overlap fully. |
+
+Cross-run memory is verified end-to-end: a second analysis of the same ticker reports `Days of History: 1` and retrieves the prior run's indexed articles, confirming the RAG loop.
+
+## vs. QuantMind v1
+
+- **Async vs. synchronous** — `asyncio` throughout (httpx, aiosqlite, concurrent scrape + multi-ticker batch) instead of blocking, one-thing-at-a-time `requests`.
+- **4 sources vs. 3** — adds SEC EDGAR alongside Polygon, Finviz, and TradingView, each isolated and individually timed.
+- **Vector memory vs. SQL-only** — ChromaDB RAG so each run is informed by semantically similar past events, not just a flat history table.
+- **Typed pipeline vs. dict passing** — validated Pydantic models at every boundary instead of free-form dictionaries.
+- **Multi-agent vs. monolithic** — specialized Memory/News/Quant agents coordinated by an orchestrator, replacing one big summarize-everything function.
+- **Resilient LLM client vs. one-shot** — rate-limited, 3-retry-with-backoff structured-output client, plus a provider-agnostic factory (swap Gemini for OpenAI/Anthropic via config) instead of a single direct call.
