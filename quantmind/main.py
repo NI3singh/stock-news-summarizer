@@ -138,7 +138,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="quantmind",
         description="QuantMind v2 — Multi-agent quantitative news intelligence",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    # Not required: running with NO subcommand launches the interactive menu.
+    subparsers = parser.add_subparsers(
+        dest="command", help="run with no command to launch the interactive menu"
+    )
 
     analyze_parser = subparsers.add_parser("analyze", help="Analyze one or more tickers")
     analyze_parser.add_argument(
@@ -174,6 +177,31 @@ HANDLER_MAP = {
 }
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console-script entry point (`quantmind`)."""
     args = parser.parse_args()
-    asyncio.run(HANDLER_MAP[args.command](args))
+    if args.command is None:
+        # No subcommand → launch the interactive TUI menu. Imported lazily so
+        # plain commands and --help don't pay the prompt-toolkit import cost.
+        from quantmind.tui import run_menu
+
+        try:
+            asyncio.run(run_menu())
+        except Exception as exc:  # noqa: BLE001 — friendly hint for the no-console case
+            # prompt_toolkit needs a real console; Git Bash/MinTTY/pipes raise
+            # NoConsoleScreenBufferError. Re-raise anything unrelated.
+            if "console" in f"{type(exc).__name__} {exc}".lower():
+                print(
+                    "The interactive menu needs a standard terminal "
+                    "(PowerShell, cmd, or Windows Terminal) — it does not run inside "
+                    "Git Bash/MinTTY or a pipe.\n"
+                    "You can still use commands directly, e.g.  quantmind analyze AAPL"
+                )
+            else:
+                raise
+    else:
+        asyncio.run(HANDLER_MAP[args.command](args))
+
+
+if __name__ == "__main__":
+    main()

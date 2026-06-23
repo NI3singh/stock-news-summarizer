@@ -1,6 +1,6 @@
 # QuantMind v2 — Multi-Agent Quantitative News Intelligence
 
-QuantMind v2 turns a watchlist of tickers into structured, explainable trading intelligence. For each ticker it concurrently scrapes four news sources, retrieves what it learned on prior runs, and runs a team of specialized async agents — news, quantitative (price/technical), and memory — whose outputs a coordinator fuses into a single typed `TickerAnalysis` with a human-readable synthesis. Where the original app was a synchronous Flask script that pulled three sources and asked Gemini for one daily summary, v2 is a fully async, end-to-end **typed** pipeline with a real agent architecture, persistent vector memory (so each run is informed by the last), a provider-agnostic LLM layer, and a clean CLI.
+QuantMind v2 turns a watchlist of tickers into structured, explainable trading intelligence. For each ticker it concurrently scrapes four news sources, retrieves what it learned on prior runs, and runs a team of specialized async agents — news, quantitative (price/technical), and memory — whose outputs a coordinator fuses into a single typed `TickerAnalysis` with a human-readable synthesis. Where the original app was a synchronous Flask script that pulled three sources and asked Gemini for one daily summary, v2 is a fully async, end-to-end **typed** pipeline with a real agent architecture, persistent vector memory (so each run is informed by the last), a provider-agnostic LLM layer, and both an **interactive menu** and a scriptable CLI.
 
 ## Architecture
 
@@ -39,7 +39,8 @@ QuantMind v2 turns a watchlist of tickers into structured, explainable trading i
 ┌──────────────────────────────────────────────────────────────────────┐
 │  PIPELINE / CLI                                                        │
 │  PipelineRunner (shared resources, semaphore) · DailyScheduler         │
-│  main.py — analyze · add-ticker · remove-ticker · list-tickers · run-scheduler
+│  CLI: interactive menu (rich + questionary)  +  scriptable commands —  │
+│  analyze · add-ticker · remove-ticker · list-tickers · run-scheduler   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -57,6 +58,7 @@ QuantMind v2 turns a watchlist of tickers into structured, explainable trading i
 | Agent framework | **Custom (`BaseAgent`)** | ~100 lines of explicit, inspectable agent internals (timing, logging, error capture) vs. the opaque magic of CrewAI/AutoGen. |
 | LLM | **Gemini 2.5 Flash Lite** | Structured output (validated objects, no string parsing), strong quality, generous free tier; pluggable via a provider-agnostic factory (OpenAI/Anthropic/etc.). |
 | Concurrency | **asyncio.gather** | 4 sources scraped concurrently (~12s) instead of sequentially (~30s); multiple tickers analyzed under a semaphore. |
+| Interactive CLI | **rich + questionary** | Colored panels/tables/spinners plus an arrow-key menu, so the tool is pleasant to use interactively (`quantmind`) as well as scriptably. |
 
 ## Design Decisions
 
@@ -83,19 +85,45 @@ pip install -e ".[dev]"
 # 3. Configure secrets
 cp .env.example .env            # then fill in GEMINI_API_KEY and POLYGON_API_KEY
 
-# 4. Run your first analysis
-python quantmind/main.py analyze AAPL
+# 4. Launch the interactive menu...
+quantmind
+
+#    ...or run a one-off command directly
+quantmind analyze AAPL
 ```
 
 ## CLI Reference
 
+After `pip install -e .`, the `quantmind` command is available. Run it **with no arguments to launch the interactive menu**, or pass a subcommand to run it directly (ideal for scripts and cron):
+
 ```bash
-quantmind <command> [args]      # or: python quantmind/main.py <command> [args]
+quantmind                       # interactive arrow-key menu
+quantmind <command> [args]      # one-off command (= python quantmind/main.py <command> [args])
 ```
+
+### Interactive menu
+
+Running `quantmind` with no arguments opens an arrow-key menu (built with **rich** + **questionary**). Pick an action, answer the prompt, and results render in colored panels — then it loops back to the menu.
+
+```
+ QuantMind v2 · Multi-agent quantitative news intelligence
+
+ ? What would you like to do?  (use the up/down arrows, then Enter)
+ > Analyze ticker(s)
+   Add ticker to watchlist
+   List watchlist
+   Remove ticker
+   Run daily scheduler
+   Exit
+```
+
+> **Note:** the interactive menu needs a real terminal — **PowerShell, cmd, or Windows Terminal**. It does not run inside Git Bash/MinTTY or through a pipe (a `prompt_toolkit` limitation); use the direct commands below in those environments.
+
+### Commands
 
 **`analyze TICKERS...`** — run the full pipeline for one or more tickers.
 ```
-$ python quantmind/main.py analyze AAPL
+$ quantmind analyze AAPL
 ────────────────────────────────────────────────────────────
 TICKER: AAPL  |  2026-06-23 06:01
 Sentiment: +0.30  |  Days of History: 1
@@ -116,26 +144,26 @@ SIGNALS: RSI=49.25  MACD=1.20  Vol Ratio=0.85
 
 **`add-ticker SYMBOL`** — add a ticker to the watchlist.
 ```
-$ python quantmind/main.py add-ticker NVDA
+$ quantmind add-ticker NVDA
 Added NVDA to watchlist
 ```
 
 **`remove-ticker SYMBOL`** — remove (soft-delete) a ticker from the watchlist.
 ```
-$ python quantmind/main.py remove-ticker NVDA
+$ quantmind remove-ticker NVDA
 Removed NVDA from watchlist
 ```
 
 **`list-tickers`** — show active tickers and when each was last analyzed.
 ```
-$ python quantmind/main.py list-tickers
+$ quantmind list-tickers
 Active tickers:
   AAPL  (last analyzed: 2026-06-23 06:08)
 ```
 
 **`run-scheduler`** — analyze the whole watchlist now, then start the daily cron refresh.
 ```
-$ python quantmind/main.py run-scheduler
+$ quantmind run-scheduler
 Running initial analysis for 3 tickers before starting scheduler...
 Scheduler running. Daily refresh at 08:00 Asia/Kolkata
 Press Ctrl+C to stop.
@@ -160,4 +188,5 @@ Cross-run memory is verified end-to-end: a second analysis of the same ticker re
 - **Vector memory vs. SQL-only** — ChromaDB RAG so each run is informed by semantically similar past events, not just a flat history table.
 - **Typed pipeline vs. dict passing** — validated Pydantic models at every boundary instead of free-form dictionaries.
 - **Multi-agent vs. monolithic** — specialized Memory/News/Quant agents coordinated by an orchestrator, replacing one big summarize-everything function.
+- **Interactive menu + scriptable CLI** — an arrow-key TUI (rich + questionary) for exploration *and* one-off commands for scripts/cron, vs. a single web view.
 - **Resilient LLM client vs. one-shot** — rate-limited, 3-retry-with-backoff structured-output client, plus a provider-agnostic factory (swap Gemini for OpenAI/Anthropic via config) instead of a single direct call.

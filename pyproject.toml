@@ -35,6 +35,9 @@ dependencies = [
     "langchain-openai>=0.2.0",
     "langchain-google-genai>=2.0.0",
     "langchain-anthropic>=0.3.0",
+    # Interactive TUI menu — rich panels/tables/spinners + questionary arrow-key menus
+    "rich>=13.0.0",
+    "questionary>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -43,6 +46,11 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-mock>=3.14.0",
 ]
+
+# Console-script entry point: after `pip install`, users get a `quantmind`
+# command. With no subcommand it launches the interactive menu (quantmind.main:main).
+[project.scripts]
+quantmind = "quantmind.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
