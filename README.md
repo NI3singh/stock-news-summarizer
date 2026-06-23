@@ -1,257 +1,192 @@
-# 📈 Stock News Summarizer - AI-Powered Stock Market Summaries
+# QuantMind v2 — Multi-Agent Quantitative News Intelligence
 
-A comprehensive, cost-effective solution that automatically aggregates financial news from multiple sources and generates intelligent AI summaries using Google's Gemini Pro. Designed for traders and investors who need quick, actionable insights.
+QuantMind v2 turns a watchlist of tickers into structured, explainable trading intelligence. For each ticker it concurrently scrapes four news sources, retrieves what it learned on prior runs, and runs a team of specialized async agents — news, quantitative (price/technical), and memory — whose outputs a coordinator fuses into a single typed `TickerAnalysis` with a human-readable synthesis. Where the original app was a synchronous Flask script that pulled three sources and asked Gemini for one daily summary, v2 is a fully async, end-to-end **typed** pipeline with a real agent architecture, persistent vector memory (so each run is informed by the last), a provider-agnostic LLM layer, and both an **interactive menu** and a scriptable CLI.
 
-![Python](https://img.shields.io/badge/Python-3.11-blue)
-![Flask](https://img.shields.io/badge/Flask-3.0-green)
-![Gemini](https://img.shields.io/badge/AI-Gemini%20Pro-orange)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+## Architecture
 
-## 🌟 Features
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  DATA SOURCES                                                          │
+│  Polygon API   ·   Finviz   ·   TradingView   ·   SEC EDGAR           │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  (4 sources, concurrent)
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  ASYNC SCRAPER ORCHESTRATOR                                            │
+│  BaseScraper (httpx + rate limiter) · TradingView via crawl4ai        │
+│  asyncio.gather + per-source timeout + URL/title dedup                 │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  list[Article]
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  AGENT LAYER  (custom BaseAgent framework)                            │
+│                                                                        │
+│        MemoryAgent ──► MemoryContext ──┐                              │
+│                                         ├─► OrchestratorAgent ─► Synthesis
+│        NewsAgent  ┐                     │       (fuses all 3)          │
+│                   ├─(asyncio.gather)────┘                              │
+│        QuantAgent ┘                                                    │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  TickerAnalysis (typed)
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  SUPPORT LAYER                                                         │
+│  GeminiClient (retry/rate-limit) · provider-agnostic LLM factory      │
+│  DatabaseManager (aiosqlite) · VectorStore (ChromaDB) · Settings · log │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                 │  persist + index (closes RAG loop)
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  PIPELINE / CLI                                                        │
+│  PipelineRunner (shared resources, semaphore) · DailyScheduler         │
+│  CLI: interactive menu (rich + questionary)  +  scriptable commands —  │
+│  analyze · add-ticker · remove-ticker · list-tickers · run-scheduler   │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
-### Data Collection
-- **Multi-Source Aggregation**: Collects news from 3 major sources
-  - TradingView news pages
-  - Finviz quote pages
-  - Polygon API news endpoint
-- **Smart Deduplication**: Removes duplicate articles automatically
-- **Rate Limiting**: Respects API quotas and implements delays
+## Tech Stack
 
-### AI Processing
-- **Intelligent Article Selection**: AI selects top 5-7 most relevant articles
-- **Quality Summarization**: Generates <500 word summaries
-- **"What Changed Today"**: Highlights new developments with 7-day context
-- **Historical Analysis**: Compares current news with past week's data
+| Component | Technology | Why This Choice |
+|---|---|---|
+| HTTP client | **httpx** | Async-native; replaces blocking `requests` so all four sources fetch concurrently. |
+| Web scraping | **crawl4ai** | Drives a headless browser to render the JS-heavy pages TradingView requires (plain HTTP returns an empty shell). |
+| AI validation | **Pydantic v2** | End-to-end typed pipeline — agents pass validated models, never raw dicts; bad LLM output fails loudly at the boundary. |
+| Config | **pydantic-settings** | Validates secrets at startup (fail-fast with a clear message) instead of failing silently on the first API call. |
+| Logging | **loguru** | Structured, colored, rotating file logs — replaces `print()` and ad-hoc logging config. |
+| Vector memory | **ChromaDB** | Local persistent embeddings for RAG; no external server or API to run. |
+| Async DB | **aiosqlite** | Non-blocking SQLite using only portable SQL (no SQLite-only functions) so it can migrate to PostgreSQL. |
+| Agent framework | **Custom (`BaseAgent`)** | ~100 lines of explicit, inspectable agent internals (timing, logging, error capture) vs. the opaque magic of CrewAI/AutoGen. |
+| LLM | **Gemini 2.5 Flash Lite** | Structured output (validated objects, no string parsing), strong quality, generous free tier; pluggable via a provider-agnostic factory (OpenAI/Anthropic/etc.). |
+| Concurrency | **asyncio.gather** | 4 sources scraped concurrently (~12s) instead of sequentially (~30s); multiple tickers analyzed under a semaphore. |
+| Interactive CLI | **rich + questionary** | Colored panels/tables/spinners plus an arrow-key menu, so the tool is pleasant to use interactively (`quantmind`) as well as scriptably. |
 
-### User Interface
-- **Clean, Professional Design**: Modern, responsive interface
-- **Ticker Management**: Easy add/remove functionality
-- **Source Transparency**: Shows all URLs and headlines used
-- **Historical View**: Access 7 days of summary history
-- **Real-time Updates**: Manual refresh for any ticker
+## Design Decisions
 
-### Automation
-- **Scheduled Updates**: Daily refresh at 8 AM IST
-- **Background Processing**: Non-blocking operations
-- **Persistent Storage**: SQLite database for history
-- **Error Handling**: Graceful failure recovery
+**1. Custom agent framework over CrewAI / AutoGen.** Agent frameworks hide the control flow that matters most here — when each agent runs, what context it sees, how failures propagate. A ~100-line `BaseAgent` (an `execute()` wrapper that times the run, logs it to the DB, and converts any exception into a typed failure result that never crashes the pipeline) makes all of that explicit and debuggable. The orchestration ("memory first, then news + quant in parallel, then one synthesis call") is plain `asyncio`, not a DSL.
 
-## 💰 Cost Breakdown
+**2. ChromaDB vector memory, not just SQL history.** SQL can tell you *that* a ticker was analyzed before; it can't tell you *which past events resemble today's news*. The Memory Agent embeds prior articles in ChromaDB and retrieves the semantically closest ones, so the synthesis can say "this echoes the supply-chain concern from last week." SQL still stores the structured analyses (for the sentiment-trend and recency signals); the two are complementary.
 
-**Total Monthly Cost: $0** ✅
+**3. All scrapers concurrent with `asyncio.gather`.** The four sources are independent I/O-bound calls, so running them sequentially just adds their latencies. `gather` overlaps them, and each is wrapped in an isolated task with its own timeout — one slow or failing source (e.g. the browser-based TradingView crawl) can't abort the others or blow the latency budget.
 
-| Service | Plan | Cost | Usage |
-|---------|------|------|-------|
-| Gemini Pro API | Free Tier | $0 | 60 requests/minute |
-| Polygon API | Free Tier | $0 | 5 calls/minute |
-| Render.com | Free Tier | $0 | 750 hours/month |
-| **TOTAL** | | **$0/month** | **$0 *currrently** |
+**4. Pydantic for everything.** Every boundary — a scraped `Article`, an agent's `AgentResult`, the final `TickerAnalysis` — is a validated Pydantic model. This means an agent literally cannot pass a malformed object downstream, the LLM's structured output is validated on arrival, and the whole pipeline is autocomplete-friendly and self-documenting. Typing the pipeline end-to-end turns a class of silent runtime bugs into loud, located errors.
 
-### Cost Optimization Strategies
-1. Uses free tier APIs with generous limits
-2. Implements aggressive caching
-3. Rate limiting prevents quota exhaustion
-4. SQLite eliminates database costs
-5. Static files served directly (no CDN needed)
+**5. `generate_structured()` instead of prompt-parsing hacks.** Rather than asking the model for JSON and then regex-stripping markdown fences and `json.loads`-ing the result (brittle, and a frequent source of production failures), the LLM client uses structured output (`with_structured_output(schema)` over the provider factory, backed by Gemini's response-schema support). The model returns a *validated Pydantic instance directly* — there is no string parsing anywhere in the pipeline.
 
-## 🚀 Quick Start
+## Quick Start
 
-### Prerequisites
-- Python 3.11+
-- Git
-- Gemini API Key (free from Google AI Studio)
-- Polygon API Key (free tier)
-
-### Local Installation
-
-1. **Clone Repository**
 ```bash
-git clone https://github.com/NI3singh/stock-news-summarizer.git
-cd stock-news-summarizer
+# 1. Clone and check out the branch
+git clone <repo-url> && cd stock-news-summarizer
+git checkout v2-multiagent
+
+# 2. Install (editable, with dev/test extras) into a Python 3.13 venv
+pip install -e ".[dev]"
+
+# 3. Configure secrets
+cp .env.example .env            # then fill in GEMINI_API_KEY and POLYGON_API_KEY
+
+# 4. Launch the interactive menu...
+quantmind
+
+#    ...or run a one-off command directly
+quantmind analyze AAPL
 ```
 
-2. **Create Virtual Environment**
+## CLI Reference
+
+After `pip install -e .`, the `quantmind` command is available. Run it **with no arguments to launch the interactive menu**, or pass a subcommand to run it directly (ideal for scripts and cron):
+
 ```bash
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# Mac/Linux
-source venv/bin/activate
+quantmind                       # interactive arrow-key menu
+quantmind <command> [args]      # one-off command (= python quantmind/main.py <command> [args])
 ```
 
-3. **Install Dependencies**
-```bash
-pip install -r requirements.txt
-```
+### Interactive menu
 
-4. **Configure Environment Variables**
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and add your API keys:
-```
-GEMINI_API_KEY=your_key_here
-POLYGON_API_KEY=your_key_here
-FLASK_SECRET_KEY=your_secret_key
-```
-
-5. **Run Application**
-```bash
-python app.py
-```
-
-Visit `http://localhost:5000`
-
-## 📦 Project Structure
+Running `quantmind` with no arguments opens an arrow-key menu (built with **rich** + **questionary**). Pick an action, answer the prompt, and results render in colored panels — then it loops back to the menu.
 
 ```
-financial-news-aggregator/
-│
-├── app.py                          # Main Flask application
-├── config.py                       # Configuration settings
-├── requirements.txt                # Python dependencies
-├── Procfile                        # Deployment config
-├── runtime.txt                     # Python version
-├── .env.example                    # Environment template
-│
-├── scrapers/                       # Web scraping modules
-│   ├── __init__.py                # Orchestrator
-│   ├── tradingview_scraper.py     # TradingView scraper
-│   ├── finviz_scraper.py          # Finviz scraper
-│   └── polygon_scraper.py         # Polygon API client
-│
-├── ai/                            # AI processing
-│   ├── __init__.py
-│   └── gemini_processor.py        # Gemini AI integration
-│
-├── database/                      # Database layer
-│   ├── __init__.py
-│   └── models.py                  # SQLite models & queries
-│
-├── scheduler/                     # Task scheduling
-│   ├── __init__.py
-│   └── daily_tasks.py            # Daily refresh jobs
-│
-├── static/                        # Frontend assets
-│   ├── css/
-│   └── js/
-│       └── main.js               # Frontend JavaScript
-│
-└── templates/                     # HTML templates
-    └── index.html                # Main UI
+ QuantMind v2 · Multi-agent quantitative news intelligence
+
+ ? What would you like to do?  (use the up/down arrows, then Enter)
+ > Analyze ticker(s)
+   Add ticker to watchlist
+   List watchlist
+   Remove ticker
+   Run daily scheduler
+   Exit
 ```
 
-## 🔧 API Endpoints
+> **Note:** the interactive menu needs a real terminal — **PowerShell, cmd, or Windows Terminal**. It does not run inside Git Bash/MinTTY or through a pipe (a `prompt_toolkit` limitation); use the direct commands below in those environments.
 
-### Tickers
-- `GET /api/tickers` - List all tickers
-- `POST /api/tickers` - Add new ticker
-  ```json
-  {"symbol": "AAPL"}
-  ```
-- `DELETE /api/tickers/<symbol>` - Remove ticker
+### Commands
 
-### Summaries
-- `GET /api/summary/<symbol>` - Get summary and history
-- `POST /api/refresh/<symbol>` - Refresh specific ticker
-- `POST /api/refresh-all` - Refresh all tickers
+**`analyze TICKERS...`** — run the full pipeline for one or more tickers.
+```
+$ quantmind analyze AAPL
+────────────────────────────────────────────────────────────
+TICKER: AAPL  |  2026-06-23 06:01
+Sentiment: +0.30  |  Days of History: 1
+Themes: Intel-Apple Chip Collaboration, Rising Memory Chip Costs, AI Strategy, ...
 
-### Health
-- `GET /health` - Health check endpoint
+WHAT CHANGED:
+The primary new development is the reported agreement between Apple and Intel ...
 
-## 🎯 Usage Guide
+SYNTHESIS:
+Apple's stock is currently influenced by a confluence of strategic advancements
+and immediate cost pressures ... a bearish MACD crossover ... For a trader
+monitoring AAPL, the key takeaway is to watch for confirmation of the Intel
+partnership ...
 
-### Adding Your First Ticker
+SIGNALS: RSI=49.25  MACD=1.20  Vol Ratio=0.85
+────────────────────────────────────────────────────────────
+```
 
-1. Enter ticker symbol (e.g., "AAPL") in the input box
-2. Click the **+** button
-3. Wait 10-30 seconds for initial processing
-4. View the generated summary
+**`add-ticker SYMBOL`** — add a ticker to the watchlist.
+```
+$ quantmind add-ticker NVDA
+Added NVDA to watchlist
+```
 
-### Understanding the Summary
+**`remove-ticker SYMBOL`** — remove (soft-delete) a ticker from the watchlist.
+```
+$ quantmind remove-ticker NVDA
+Removed NVDA from watchlist
+```
 
-**Main Summary**: Comprehensive overview of recent news
-- Key developments and announcements
-- Financial metrics and performance
-- Market sentiment and analyst views
+**`list-tickers`** — show active tickers and when each was last analyzed.
+```
+$ quantmind list-tickers
+Active tickers:
+  AAPL  (last analyzed: 2026-06-23 06:08)
+```
 
-**What Changed Today**: Specific new developments
-- Compares to previous 7 days
-- Highlights breaking news
-- Identifies trend changes
+**`run-scheduler`** — analyze the whole watchlist now, then start the daily cron refresh.
+```
+$ quantmind run-scheduler
+Running initial analysis for 3 tickers before starting scheduler...
+Scheduler running. Daily refresh at 08:00 Asia/Kolkata
+Press Ctrl+C to stop.
+```
 
-**Source Articles**: All articles used in summary
-- Clickable links to original sources
-- Multiple sources for verification
-- Transparent data sourcing
+## Performance
 
-### Manual Refresh
+Measured on live runs (free-tier Gemini, single developer machine):
 
-- **Single Ticker**: Click refresh icon next to ticker
-- **All Tickers**: Click "Refresh All" button in header
-- Processing takes 10-30 seconds per ticker
+| Operation | Time | Notes |
+|---|---|---|
+| Scraping (4 sources, concurrent) | **~12s** / ticker | Polygon + Finviz productive (~45 articles); TradingView/EDGAR selectors are known follow-ups. |
+| Full single-ticker analysis | **~32s** | Scrape → memory → news + quant → synthesis → persist. |
+| 3-ticker concurrent batch | **~58s** | vs. ~96s if run sequentially → **~40% faster**. Not 3× because the shared LLM rate limiter (0.9 calls/s) serializes the model calls; the scrapes overlap fully. |
 
-## 🚀 Deployment
+Cross-run memory is verified end-to-end: a second analysis of the same ticker reports `Days of History: 1` and retrieves the prior run's indexed articles, confirming the RAG loop.
 
-### Deployed on Render.com (FREE)
+## vs. QuantMind v1
 
-## 📊 Performance Metrics
-
-### Typical Processing Times
-- Article scraping (3 sources): 5-10 seconds
-- AI article selection: 2-3 seconds
-- AI summary generation: 3-5 seconds
-- **Total per ticker**: 10-18 seconds
-
-### Resource Usage
-- Memory: ~100-150 MB
-- CPU: Minimal (scraping + API calls)
-- Storage: ~1-2 MB per ticker per month
-- Bandwidth: ~5-10 MB per ticker daily
-
-## 📈 Future Enhancements
-
-### Planned Features
-- [ ] Email notifications for daily summaries
-- [ ] Custom refresh schedules per ticker
-- [ ] Sentiment analysis scores
-- [ ] Price chart integration
-- [ ] Export summaries to PDF
-- [ ] Multi-user support with authentication
-
-### Contribution Ideas
-- Add more data sources (Yahoo Finance, Bloomberg)
-- Improve AI prompt engineering
-- Add technical indicators
-- Implement webhooks for real-time updates
-
-## 📝 License
-
-MIT License - feel free to use for personal or commercial projects
-
-## 🙏 Acknowledgments
-
-- Google Gemini for powerful free AI API
-- Polygon.io for comprehensive financial data
-- TradingView & Finviz for news aggregation
-- Flask community for excellent documentation
-
-## 📧 Contact & Support
-
-For issues, questions, or contributions:
-- GitHub Issues: [Create an issue]
-- Documentation: This README
-- API Status: Check individual provider status pages
-
----
-
-<div align="center">
-
-**Built with ❤️ for traders and investors**
-
-**Star ⭐ this repo if you find it useful!**
-
-</div>
+- **Async vs. synchronous** — `asyncio` throughout (httpx, aiosqlite, concurrent scrape + multi-ticker batch) instead of blocking, one-thing-at-a-time `requests`.
+- **4 sources vs. 3** — adds SEC EDGAR alongside Polygon, Finviz, and TradingView, each isolated and individually timed.
+- **Vector memory vs. SQL-only** — ChromaDB RAG so each run is informed by semantically similar past events, not just a flat history table.
+- **Typed pipeline vs. dict passing** — validated Pydantic models at every boundary instead of free-form dictionaries.
+- **Multi-agent vs. monolithic** — specialized Memory/News/Quant agents coordinated by an orchestrator, replacing one big summarize-everything function.
+- **Interactive menu + scriptable CLI** — an arrow-key TUI (rich + questionary) for exploration *and* one-off commands for scripts/cron, vs. a single web view.
+- **Resilient LLM client vs. one-shot** — rate-limited, 3-retry-with-backoff structured-output client, plus a provider-agnostic factory (swap Gemini for OpenAI/Anthropic via config) instead of a single direct call.
