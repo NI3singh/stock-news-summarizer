@@ -129,8 +129,16 @@ async def cmd_run_scheduler(args: argparse.Namespace) -> None:
     print("Press Ctrl+C to stop.")
 
     # Keep the event loop alive (bot + scheduler run on it) until interrupted.
+    # With --with-mcp, the MCP server's serve loop keeps us alive instead.
     try:
-        await asyncio.Event().wait()
+        if getattr(args, "with_mcp", False):
+            from quantmind.integrations.mcp_server import start_mcp_server
+
+            url = f"http://{settings.mcp_server_host}:{settings.mcp_server_port}/mcp"
+            print(f"MCP server also enabled at: {url}")
+            await start_mcp_server(runner)
+        else:
+            await asyncio.Event().wait()
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
     finally:
@@ -138,6 +146,23 @@ async def cmd_run_scheduler(args: argparse.Namespace) -> None:
             await runner.bot.stop()
         sched.stop()
         print("Scheduler stopped gracefully.")
+
+
+async def cmd_mcp_server(args: argparse.Namespace) -> None:
+    # Imported lazily so plain commands / --help don't pay the fastmcp import cost.
+    from quantmind.integrations.mcp_server import start_mcp_server
+
+    runner = PipelineRunner()
+    await runner.initialize()
+
+    url = f"http://{settings.mcp_server_host}:{settings.mcp_server_port}/mcp"
+    print("Starting QuantMind MCP server...")
+    print(f"Connect Claude Desktop at: {url}")
+    print("Press Ctrl+C to stop.")
+    try:
+        await start_mcp_server(runner)
+    except KeyboardInterrupt:
+        print("MCP server stopped.")
 
 
 # --- Parser ------------------------------------------------------------------
@@ -167,9 +192,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("list-tickers", help="List active watchlist tickers")
 
-    subparsers.add_parser(
+    run_scheduler_parser = subparsers.add_parser(
         "run-scheduler",
         help="Run an initial analysis, then start the daily scheduler",
+    )
+    run_scheduler_parser.add_argument(
+        "--with-mcp",
+        action="store_true",
+        help="also start the MCP server (for Claude Desktop)",
+    )
+
+    subparsers.add_parser(
+        "mcp-server",
+        help="Start the MCP server for Claude Desktop integration",
     )
 
     return parser
@@ -183,6 +218,7 @@ HANDLER_MAP = {
     "remove-ticker": cmd_remove_ticker,
     "list-tickers": cmd_list_tickers,
     "run-scheduler": cmd_run_scheduler,
+    "mcp-server": cmd_mcp_server,
 }
 
 

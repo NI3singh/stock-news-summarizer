@@ -40,6 +40,8 @@ dependencies = [
     "questionary>=2.0.0",
     # Telegram bot integration (Phase B) — optional at runtime
     "python-telegram-bot>=21.0",
+    # MCP server (Phase C) — exposes QuantMind as tools to MCP clients
+    "fastmcp>=0.4.0",
 ]
 
 [project.optional-dependencies]

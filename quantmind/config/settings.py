@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
 
+    # MCP server (Phase C) — host/port for the FastMCP server (optional).
+    mcp_server_host: str = "127.0.0.1"
+    mcp_server_port: int = 8765
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
