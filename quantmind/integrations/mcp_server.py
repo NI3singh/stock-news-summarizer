@@ -303,6 +303,65 @@ async def get_system_status() -> dict:
     }
 
 
+@mcp.tool()
+async def get_ml_signal(ticker: str) -> dict:
+    """
+    Get the trained ML model's next-trading-day UP/DOWN prediction for a ticker.
+
+    Returns prediction, confidence, probabilities, and signal strength — or an
+    error dict if there is no recent analysis or no trained model yet. The model
+    learns from the system's own historical analyses; train it once enough
+    history has accumulated.
+
+    Args:
+        ticker: Stock ticker symbol (e.g. 'AAPL').
+    """
+    runner = get_runner()
+    ticker = ticker.upper().strip()
+    from quantmind.ml.model import SignalModel
+    from quantmind.schemas import MemoryContext, NewsAnalysis, TickerAnalysis
+
+    analyses = await runner.db.get_recent_analyses(ticker, days=1)
+    if not analyses:
+        return {
+            "error": f"No recent analysis for {ticker}. Run run_stock_analysis('{ticker}') first.",
+            "ticker": ticker,
+        }
+    model = SignalModel(ticker)
+    if not model.load():
+        return {
+            "error": f"No trained model for {ticker} yet — needs more analysis history.",
+            "ticker": ticker,
+        }
+    latest = analyses[0]
+    ta = TickerAnalysis(
+        ticker=ticker,
+        news=NewsAnalysis(sentiment_score=latest.get("sentiment_score") or 0.0),
+        memory=MemoryContext(),
+    )
+    return model.predict(ta)
+
+
+@mcp.tool()
+async def get_entity_graph(ticker: str | None = None) -> dict:
+    """
+    Get the entity relationship graph extracted from news, with analytics.
+
+    Returns node/edge counts, the most-connected entities (degree centrality),
+    key connectors that bridge clusters (betweenness), the entity- and
+    relationship-type breakdowns, and the relationship list.
+
+    Args:
+        ticker: Optional ticker symbol; omit to span all tickers.
+    """
+    runner = get_runner()
+    from quantmind.ml.entity_graph import EntityGraph
+
+    return await EntityGraph(runner.db).analytics(
+        ticker.upper().strip() if ticker else None
+    )
+
+
 # --- Serving (Phase C.4) -----------------------------------------------------
 
 async def start_mcp_server(pipeline_runner: PipelineRunner) -> None:

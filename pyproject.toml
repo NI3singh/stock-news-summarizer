@@ -42,9 +42,10 @@ dependencies = [
     "python-telegram-bot>=21.0",
     # MCP server (Phase C) — exposes QuantMind as tools to MCP clients
     "fastmcp>=0.4.0",
-    # ML layer (Phase D) — sentiment->signal model + persistence
+    # ML layer (Phase D) — sentiment->signal model + persistence + entity graph
     "scikit-learn>=1.5.0",
     "joblib>=1.4.0",
+    "networkx>=3.0",
 ]
 
 [project.optional-dependencies]

@@ -59,6 +59,12 @@ async def cmd_analyze(args: argparse.Namespace) -> None:
         print(ta.final_synthesis)
         print()
         print(signals_line)
+        if ta.ml_prediction:
+            mp = ta.ml_prediction
+            print(
+                f"ML SIGNAL: {mp.prediction} "
+                f"({mp.confidence:.0%} confidence, {mp.signal_strength})"
+            )
         print(_RULE)
 
 
@@ -178,16 +184,28 @@ async def cmd_train_model(args: argparse.Namespace) -> None:
 
 
 async def cmd_entity_graph(args: argparse.Namespace) -> None:
+    from quantmind.ml.entity_graph import EntityGraph
+
     runner = PipelineRunner()
     await runner.initialize()
-    graph = await runner.db.get_entity_graph(ticker=args.ticker)
-    print(f"\nEntity Graph ({len(graph['nodes'])} nodes, {len(graph['edges'])} edges)")
-    print("\nTop nodes by mentions:")
-    for n in sorted(graph["nodes"], key=lambda x: x["weight"], reverse=True)[:10]:
-        print(f"  {n['id']} ({n['type']}) — {n['weight']} mentions")
+    stats = await EntityGraph(runner.db).analytics(
+        ticker=args.ticker.upper() if args.ticker else None
+    )
+    print(f"\nEntity Graph ({stats['node_count']} nodes, {stats['edge_count']} edges)")
+    if stats["node_count"] == 0:
+        print(stats.get("message", ""))
+        return
+    print(f"  Density: {stats['density']}  |  Types: {stats['entity_types']}")
+    print("\nMost connected (degree centrality):")
+    for x in stats["most_connected"]:
+        print(f"  {x['entity']}  ({x['centrality']})")
+    if stats["key_connectors"]:
+        print("\nKey connectors (bridges):")
+        for x in stats["key_connectors"]:
+            print(f"  {x['entity']}  ({x['betweenness']})")
     print("\nRelationships:")
-    for e in graph["edges"][:15]:
-        print(f"  {e['source']} --[{e['relationship']}]--> {e['target']} (weight: {e['weight']})")
+    for r in stats["relationships"][:15]:
+        print(f"  {r}")
 
 
 async def cmd_ml_status(args: argparse.Namespace) -> None:
