@@ -14,7 +14,14 @@ from datetime import datetime, timedelta, timezone
 import aiosqlite
 
 from quantmind.config import settings
-from quantmind.schemas import AlertEvent, AlertRule, Article, TickerAnalysis
+from quantmind.schemas import (
+    AlertEvent,
+    AlertRule,
+    Article,
+    EntityRelationship,
+    ExtractedEntity,
+    TickerAnalysis,
+)
 from quantmind.utils import logger
 
 
@@ -98,6 +105,30 @@ _SCHEMA = [
         triggered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         message TEXT,
         delivered INTEGER DEFAULT 0
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS entities (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        ticker TEXT NOT NULL,
+        mentioned_count INTEGER DEFAULT 1,
+        first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(name, ticker)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS entity_relationships (
+        id INTEGER PRIMARY KEY,
+        source_entity TEXT NOT NULL,
+        target_entity TEXT NOT NULL,
+        relationship TEXT NOT NULL,
+        confidence REAL DEFAULT 1.0,
+        ticker TEXT NOT NULL,
+        mentioned_in_article TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """,
 ]
@@ -198,6 +229,21 @@ class DatabaseManager:
             )
             await db.commit()
         logger.debug("Analysis saved for {}", ticker)
+
+    async def get_all_analyses(self, ticker: str) -> list[dict]:
+        """Return ALL analyses for a ticker, oldest first (for ML training)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT id, ticker, analyzed_at, sentiment_score,
+                       quant_interpretation, final_synthesis
+                FROM analyses WHERE ticker = ? ORDER BY analyzed_at ASC
+                """,
+                (ticker,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
     async def get_recent_analyses(self, ticker: str, days: int = 7) -> list[dict]:
         """Return analyses for a ticker within the last ``days``, newest first."""
@@ -313,3 +359,88 @@ class DatabaseManager:
                 (event.rule_id, event.ticker, event.message, int(event.delivered)),
             )
             await db.commit()
+
+    # --- Entity graph (Phase D.6) --------------------------------------------
+
+    async def save_entities(self, entities: list[ExtractedEntity]) -> None:
+        """Upsert entities; bump mentioned_count + last_seen on repeat sightings."""
+        async with aiosqlite.connect(self.db_path) as db:
+            for e in entities:
+                cursor = await db.execute(
+                    "INSERT OR IGNORE INTO entities (name, entity_type, ticker) "
+                    "VALUES (?, ?, ?)",
+                    (e.name, e.entity_type.value, e.ticker),
+                )
+                if cursor.rowcount == 0:  # already existed -> count it as another mention
+                    await db.execute(
+                        "UPDATE entities SET mentioned_count = mentioned_count + 1, "
+                        "last_seen = CURRENT_TIMESTAMP WHERE name = ? AND ticker = ?",
+                        (e.name, e.ticker),
+                    )
+            await db.commit()
+
+    async def save_relationships(
+        self, relationships: list[EntityRelationship], ticker: str
+    ) -> None:
+        """Insert relationships (duplicates allowed — they weight edge strength)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            for r in relationships:
+                await db.execute(
+                    """
+                    INSERT INTO entity_relationships
+                        (source_entity, target_entity, relationship, confidence,
+                         ticker, mentioned_in_article)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        r.source_entity,
+                        r.target_entity,
+                        r.relationship,
+                        r.confidence,
+                        ticker,
+                        r.mentioned_in_article,
+                    ),
+                )
+            await db.commit()
+
+    async def get_entity_graph(self, ticker: str | None = None, days: int = 30) -> dict:
+        """Return the entity graph as {nodes, edges}.
+
+        ``days`` is accepted for API stability but not yet applied as a filter
+        (the queries return all entities; date-range filtering is a future task).
+        """
+        ent_sql = "SELECT name, entity_type, ticker, mentioned_count FROM entities"
+        rel_sql = (
+            "SELECT source_entity, target_entity, relationship, AVG(confidence), "
+            "COUNT(*) FROM entity_relationships"
+        )
+        rel_group = " GROUP BY source_entity, target_entity, relationship"
+        params: tuple = ()
+        if ticker:
+            ticker = ticker.upper()
+            ent_sql += " WHERE ticker = ?"
+            rel_sql += " WHERE ticker = ?"
+            params = (ticker,)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(ent_sql, params) as cur:
+                ent_rows = await cur.fetchall()
+            async with db.execute(rel_sql + rel_group, params) as cur:
+                rel_rows = await cur.fetchall()
+
+        return {
+            "nodes": [
+                {"id": e[0], "type": e[1], "ticker": e[2], "weight": e[3]}
+                for e in ent_rows
+            ],
+            "edges": [
+                {
+                    "source": r[0],
+                    "target": r[1],
+                    "relationship": r[2],
+                    "confidence": round(r[3], 4) if r[3] is not None else None,
+                    "weight": r[4],
+                }
+                for r in rel_rows
+            ],
+        }

@@ -165,6 +165,98 @@ async def cmd_mcp_server(args: argparse.Namespace) -> None:
         print("MCP server stopped.")
 
 
+async def cmd_train_model(args: argparse.Namespace) -> None:
+    from quantmind.ml import SignalModel  # lazy: keep sklearn off the fast-CLI path
+
+    runner = PipelineRunner()
+    await runner.initialize()
+    model = SignalModel(args.ticker.upper())
+    result = await model.train(runner.db)
+    print(f"\nTraining result for {args.ticker.upper()}:")
+    for k, v in result.items():
+        print(f"  {k}: {v}")
+
+
+async def cmd_entity_graph(args: argparse.Namespace) -> None:
+    runner = PipelineRunner()
+    await runner.initialize()
+    graph = await runner.db.get_entity_graph(ticker=args.ticker)
+    print(f"\nEntity Graph ({len(graph['nodes'])} nodes, {len(graph['edges'])} edges)")
+    print("\nTop nodes by mentions:")
+    for n in sorted(graph["nodes"], key=lambda x: x["weight"], reverse=True)[:10]:
+        print(f"  {n['id']} ({n['type']}) — {n['weight']} mentions")
+    print("\nRelationships:")
+    for e in graph["edges"][:15]:
+        print(f"  {e['source']} --[{e['relationship']}]--> {e['target']} (weight: {e['weight']})")
+
+
+async def cmd_ml_status(args: argparse.Namespace) -> None:
+    from quantmind.ml.data_collector import MLDataCollector
+    from quantmind.ml.model import MODEL_SAVE_DIR
+
+    runner = PipelineRunner()
+    await runner.initialize()
+    tickers = await runner.db.get_active_tickers()
+    print("\n=== ML Signal Model Status ===\n")
+    for ticker in tickers:
+        df = await MLDataCollector(runner.db).collect_training_data(ticker, min_samples=1)
+        model_exists = (MODEL_SAVE_DIR / f"{ticker}_model.joblib").exists()
+        trained = "Yes" if model_exists else f"No — run: quantmind train-model {ticker}"
+        print(f"Ticker: {ticker}")
+        print(f"  Training samples available: {len(df)}")
+        print(f"  Model trained: {trained}")
+        print()
+
+
+async def cmd_train_all_models(args: argparse.Namespace) -> None:
+    from quantmind.ml.model import SignalModel
+
+    runner = PipelineRunner()
+    await runner.initialize()
+    tickers = await runner.db.get_active_tickers()
+    for ticker in tickers:
+        print(f"Training model for {ticker}...")
+        result = await SignalModel(ticker).train(runner.db)
+        if result.get("status") == "trained":
+            cv = result.get("cv_accuracy_mean")
+            cv_str = f"{cv:.1%}" if cv else "N/A"
+            print(f"  ✓ Trained on {result['samples_trained']} samples. CV accuracy: {cv_str}")
+            if result.get("top_features"):
+                top = result["top_features"][0]
+                print(f"  Top feature: {top['feature']} (coeff: {top['coefficient']})")
+        else:
+            print(f"  ✗ {result.get('message', 'Training failed')}")
+
+
+async def cmd_predict(args: argparse.Namespace) -> None:
+    from quantmind.ml.model import SignalModel
+    from quantmind.schemas import MemoryContext, NewsAnalysis, TickerAnalysis
+
+    runner = PipelineRunner()
+    await runner.initialize()
+    ticker = args.ticker.upper()
+    analyses = await runner.db.get_recent_analyses(ticker, days=1)
+    if not analyses:
+        print(f"No recent analysis for {ticker}. Run: quantmind analyze {ticker}")
+        return
+    model = SignalModel(ticker)
+    if not model.load():
+        print(f"No trained model for {ticker}. Run: quantmind train-model {ticker}")
+        return
+    latest = analyses[0]
+    news = NewsAnalysis(sentiment_score=latest.get("sentiment_score") or 0.0)
+    ta = TickerAnalysis(ticker=ticker, news=news, memory=MemoryContext())
+    result = model.predict(ta)
+    if "error" in result:
+        print(result["error"])
+        return
+    print(f"\nML Signal Prediction — {ticker}")
+    print(f"  Prediction: {result['prediction']}")
+    print(f"  Confidence: {result['confidence']:.1%}")
+    print(f"  Signal Strength: {result['signal_strength']}")
+    print(f"  P(UP): {result['probability_up']:.1%} | P(DOWN): {result['probability_down']:.1%}")
+
+
 # --- Parser ------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -207,6 +299,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Start the MCP server for Claude Desktop integration",
     )
 
+    train_parser = subparsers.add_parser(
+        "train-model", help="Train the ML signal model for a ticker"
+    )
+    train_parser.add_argument("ticker", help="Ticker symbol")
+
+    entity_parser = subparsers.add_parser(
+        "entity-graph", help="Print the entity relationship graph for a ticker"
+    )
+    entity_parser.add_argument(
+        "ticker", nargs="?", help="Ticker (optional — omit for all tickers)"
+    )
+
+    subparsers.add_parser("ml-status", help="Show ML model status for all tickers")
+
+    subparsers.add_parser(
+        "train-all-models", help="Train ML models for all watchlist tickers"
+    )
+
+    predict_parser = subparsers.add_parser(
+        "predict", help="Run ML prediction on the latest analysis"
+    )
+    predict_parser.add_argument("ticker", help="Ticker symbol")
+
     return parser
 
 
@@ -219,6 +334,11 @@ HANDLER_MAP = {
     "list-tickers": cmd_list_tickers,
     "run-scheduler": cmd_run_scheduler,
     "mcp-server": cmd_mcp_server,
+    "train-model": cmd_train_model,
+    "entity-graph": cmd_entity_graph,
+    "ml-status": cmd_ml_status,
+    "train-all-models": cmd_train_all_models,
+    "predict": cmd_predict,
 }
 
 

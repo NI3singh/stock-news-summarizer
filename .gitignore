@@ -38,3 +38,4 @@ Thumbs.db
 quantmind_chroma/
 quantmind.db
 logs/
+quantmind_models/

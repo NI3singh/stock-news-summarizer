@@ -4,12 +4,17 @@ from quantmind.schemas.models import (
     MemoryContext,
     NewsAnalysis,
     QuantAnalysis,
+    MLPrediction,
     TickerAnalysis,
     AgentContext,
     AgentResult,
     AlertConditionType,
     AlertRule,
     AlertEvent,
+    EntityType,
+    EntityRelationship,
+    ExtractedEntity,
+    EntityExtractionResult,
 )
 
 __all__ = [
@@ -18,10 +23,15 @@ __all__ = [
     "MemoryContext",
     "NewsAnalysis",
     "QuantAnalysis",
+    "MLPrediction",
     "TickerAnalysis",
     "AgentContext",
     "AgentResult",
     "AlertConditionType",
     "AlertRule",
     "AlertEvent",
+    "EntityType",
+    "EntityRelationship",
+    "ExtractedEntity",
+    "EntityExtractionResult",
 ]

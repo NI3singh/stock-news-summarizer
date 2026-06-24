@@ -37,6 +37,14 @@ class OrchestratorAgent(BaseAgent):
         # Optional notifiers, wired by PipelineRunner.enable_telegram().
         self.alert_engine: AlertEngine | None = None
         self.bot: QuantMindBot | None = None
+        # ML prediction service (loads/caches per-ticker signal models).
+        from quantmind.ml.prediction_service import PredictionService
+
+        self.prediction_service = PredictionService()
+        # Entity extractor (builds the relationship graph from each run's news).
+        from quantmind.ml.entity_extractor import EntityExtractor
+
+        self.entity_extractor = EntityExtractor(self.llm)
 
     def set_notifiers(self, alert_engine: AlertEngine, bot: QuantMindBot) -> None:
         self.alert_engine = alert_engine
@@ -88,6 +96,17 @@ class OrchestratorAgent(BaseAgent):
             # which would break the recent-analyses (days=N) retrieval window.
             ticker_analysis.analyzed_at = datetime.now(timezone.utc)
 
+            # --- ML signal (only attached if a trained model exists) ---
+            ml_prediction = self.prediction_service.predict(ticker_analysis)
+            if ml_prediction:
+                ticker_analysis.ml_prediction = ml_prediction
+                logger.info(
+                    "[{}] ML prediction: {} (confidence: {:.2f})",
+                    self.name,
+                    ml_prediction.prediction,
+                    ml_prediction.confidence,
+                )
+
             # --- Step D: Persist (indexing articles closes the RAG loop) ---
             logger.info("[{}] Step D: Persisting results", self.name)
             await self.db.save_analysis(context.ticker, ticker_analysis)
@@ -97,6 +116,26 @@ class OrchestratorAgent(BaseAgent):
                 self.name,
                 len(news_analysis.selected_articles),
             )
+
+            # --- Entity graph (best-effort; never aborts the pipeline) ---
+            try:
+                entity_result = await self.entity_extractor.extract(
+                    context.ticker, news_analysis.selected_articles
+                )
+                await self.db.save_entities(entity_result.entities)
+                await self.db.save_relationships(
+                    entity_result.relationships, context.ticker
+                )
+                logger.info(
+                    "[{}] Entity graph updated: {} entities, {} relationships",
+                    self.name,
+                    len(entity_result.entities),
+                    len(entity_result.relationships),
+                )
+            except Exception as exc:  # noqa: BLE001 — entity extraction is non-critical
+                logger.warning(
+                    "[{}] Entity extraction failed (non-critical): {}", self.name, exc
+                )
 
             # --- Step E: Fire alerts (best-effort; never fails a saved analysis) ---
             if self.alert_engine and self.bot:

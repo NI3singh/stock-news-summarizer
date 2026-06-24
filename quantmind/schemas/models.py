@@ -59,6 +59,15 @@ class QuantAnalysis(BaseModel):
     correlation_note: str = ""
 
 
+class MLPrediction(BaseModel):
+    prediction: str  # "UP" or "DOWN"
+    confidence: float  # 0.0 to 1.0
+    probability_up: float
+    probability_down: float
+    signal_strength: str  # "strong", "moderate", "weak"
+    model_trained_on_samples: int | None = None
+
+
 class TickerAnalysis(BaseModel):
     ticker: str
     analyzed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -66,6 +75,7 @@ class TickerAnalysis(BaseModel):
     quant: QuantAnalysis | None = None
     memory: MemoryContext
     final_synthesis: str = ""
+    ml_prediction: MLPrediction | None = None
 
 
 class AgentContext(BaseModel):
@@ -112,3 +122,34 @@ class AlertEvent(BaseModel):
     triggered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     message: str
     delivered: bool = False
+
+
+# --- Entity graph (Phase D.5) ------------------------------------------------
+
+class EntityType(str, Enum):
+    COMPANY = "company"
+    PERSON = "person"
+    PRODUCT = "product"
+    EVENT = "event"
+    REGULATORY_BODY = "regulatory_body"
+
+
+class EntityRelationship(BaseModel):
+    source_entity: str
+    target_entity: str
+    relationship: str  # competes_with, acquired, partners_with, sues, supplies, ...
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    mentioned_in_article: str = ""  # article URL for attribution
+
+
+class ExtractedEntity(BaseModel):
+    name: str
+    entity_type: EntityType
+    ticker: str = ""  # set post-extraction (meta — not supplied by the LLM)
+    mentioned_count: int = 1
+    relationships: list[EntityRelationship] = Field(default_factory=list)
+
+
+class EntityExtractionResult(BaseModel):
+    entities: list[ExtractedEntity] = Field(default_factory=list)
+    relationships: list[EntityRelationship] = Field(default_factory=list)

@@ -9,6 +9,7 @@ import json
 
 from quantmind.schemas import (
     Article,
+    EntityExtractionResult,
     MemoryContext,
     NewsAnalysis,
     QuantAnalysis,
@@ -123,4 +124,30 @@ def synthesis_prompt(
         f"contradict the news, and one clear takeaway for a trader monitoring this stock.\n"
         f"- Write in clear professional prose — no bullet points, no headers.\n\n"
         f"TickerAnalysis JSON schema:\n{schema_json}"
+    )
+
+
+def entity_extraction_prompt(ticker: str, articles: list[Article]) -> str:
+    """Prompt to extract named entities + FACTUAL relationships from a ticker's news."""
+    blocks = "\n\n".join(
+        f"[{i}] {a.title}\n{(a.content or '')[:300]}"
+        for i, a in enumerate(articles, 1)
+    )
+    schema_json = json.dumps(EntityExtractionResult.model_json_schema(), indent=2)
+    return (
+        f"You are extracting named entities and relationships from financial news about {ticker}.\n\n"
+        f"Identify:\n"
+        f"- Companies (competitors, partners, suppliers, customers, acquirees)\n"
+        f"- Key people (CEOs, executives, analysts mentioned by name)\n"
+        f"- Products (specific product names, platforms, services)\n"
+        f"- Events (lawsuits, mergers, regulatory actions)\n"
+        f"- Regulatory bodies (SEC, FTC, DOJ, EU Commission, etc.)\n\n"
+        f"For each entity, identify explicit relationships shown in the articles.\n"
+        f"Use these relationship types only: competes_with, acquired, partners_with, sues, "
+        f"supplies, regulates, invests_in, works_for, launched, discontinued\n\n"
+        f"Focus on FACTUAL relationships stated in the articles. Do not infer. "
+        f"Only include relationships with clear textual evidence.\n\n"
+        f"ARTICLES:\n{blocks}\n\n"
+        f"Return ONLY valid JSON matching the EntityExtractionResult schema.\n"
+        f"EntityExtractionResult JSON schema:\n{schema_json}"
     )
