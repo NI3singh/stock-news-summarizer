@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     anthropic_effort: str | None = None         # Anthropic extended-thinking effort
     temperature: float | None = None            # cross-provider; None = provider default
 
+    # Telegram integration (Phase B) — OPTIONAL. Intentionally NO validator:
+    # bot features are simply disabled when these are unset. gemini/polygon
+    # remain required (validator below is unchanged).
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,

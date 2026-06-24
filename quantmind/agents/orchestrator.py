@@ -6,8 +6,11 @@ persistence. Step D indexes the selected articles into the vector store, which
 closes the RAG loop (the next run's Memory Agent retrieves them). Sub-agents are
 built from the orchestrator's own injected dependencies.
 """
+from __future__ import annotations
+
 import asyncio
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from quantmind.agents.base import BaseAgent
 from quantmind.agents.memory_agent import MemoryAgent
@@ -23,8 +26,22 @@ from quantmind.schemas import (
 )
 from quantmind.utils import logger
 
+if TYPE_CHECKING:  # type-only — set at runtime via set_notifiers()
+    from quantmind.integrations.alert_engine import AlertEngine
+    from quantmind.integrations.telegram import QuantMindBot
+
 
 class OrchestratorAgent(BaseAgent):
+    def __init__(self, name: str, llm, db, vector_store) -> None:
+        super().__init__(name, llm, db, vector_store)
+        # Optional notifiers, wired by PipelineRunner.enable_telegram().
+        self.alert_engine: AlertEngine | None = None
+        self.bot: QuantMindBot | None = None
+
+    def set_notifiers(self, alert_engine: AlertEngine, bot: QuantMindBot) -> None:
+        self.alert_engine = alert_engine
+        self.bot = bot
+
     async def run(self, context: AgentContext) -> AgentResult:
         memory_agent = MemoryAgent("memory_agent", self.llm, self.db, self.vector_store)
         news_agent = NewsAgent("news_agent", self.llm, self.db, self.vector_store)
@@ -81,7 +98,19 @@ class OrchestratorAgent(BaseAgent):
                 len(news_analysis.selected_articles),
             )
 
-            # --- Step E: Return ---
+            # --- Step E: Fire alerts (best-effort; never fails a saved analysis) ---
+            if self.alert_engine and self.bot:
+                try:
+                    alert_messages = await self.alert_engine.evaluate(
+                        context.ticker, ticker_analysis
+                    )
+                    for message in alert_messages:
+                        await self.bot.send_message(message)
+                        logger.info("[{}] Alert sent for {}", self.name, context.ticker)
+                except Exception as exc:  # noqa: BLE001 — alerting must not fail the analysis
+                    logger.warning("[{}] alert delivery failed: {}", self.name, exc)
+
+            # --- Step F: Return ---
             return AgentResult(
                 agent_name=self.name,
                 success=True,

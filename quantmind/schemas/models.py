@@ -5,6 +5,7 @@ imports its types from here. Models are defined in dependency order — later
 models reference earlier ones, so the ordering must be preserved.
 """
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -80,3 +81,34 @@ class AgentResult(BaseModel):
     data: Any = None
     error: str | None = None
     duration_seconds: float = 0.0
+
+
+# --- Alerts (Phase B.4) ------------------------------------------------------
+
+class AlertConditionType(str, Enum):
+    """Kinds of conditions an alert rule can watch for."""
+
+    SENTIMENT_BELOW = "sentiment_below"
+    SENTIMENT_ABOVE = "sentiment_above"
+    NEW_SEC_FILING = "new_sec_filing"
+    DAILY_SUMMARY = "daily_summary"
+
+
+class AlertRule(BaseModel):
+    id: int | None = None
+    ticker: str | None = None  # None means "any ticker"
+    condition_type: AlertConditionType
+    threshold: float | None = None  # for sentiment conditions
+    is_active: bool = True
+    # aware-UTC default (matches TickerAnalysis); avoids the deprecated utcnow.
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_triggered_at: datetime | None = None
+    delivery_channel: str = "telegram"
+
+
+class AlertEvent(BaseModel):
+    rule_id: int
+    ticker: str
+    triggered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    message: str
+    delivered: bool = False

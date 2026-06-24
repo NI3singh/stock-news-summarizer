@@ -38,6 +38,8 @@ dependencies = [
     # Interactive TUI menu — rich panels/tables/spinners + questionary arrow-key menus
     "rich>=13.0.0",
     "questionary>=2.0.0",
+    # Telegram bot integration (Phase B) — optional at runtime
+    "python-telegram-bot>=21.0",
 ]
 
 [project.optional-dependencies]

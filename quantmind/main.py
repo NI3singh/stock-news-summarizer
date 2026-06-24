@@ -103,6 +103,13 @@ async def cmd_list_tickers(args: argparse.Namespace) -> None:
 async def cmd_run_scheduler(args: argparse.Namespace) -> None:
     runner = PipelineRunner()
     await runner.initialize()
+    runner.enable_telegram()  # wires bot + alert engine if creds are set
+
+    # Start the bot FIRST so the startup analysis can deliver alerts, and so all
+    # work (bot polling, scheduled jobs, alert sends) shares this one event loop.
+    if runner.bot:
+        await runner.bot.run_polling()
+        print("Telegram bot started")
 
     # Run an immediate analysis for all tickers on startup.
     tickers = await runner.db.get_active_tickers()
@@ -121,12 +128,14 @@ async def cmd_run_scheduler(args: argparse.Namespace) -> None:
     print(f"Scheduler running. Daily refresh at {settings.refresh_time} {settings.timezone}")
     print("Press Ctrl+C to stop.")
 
+    # Keep the event loop alive (bot + scheduler run on it) until interrupted.
     try:
-        import time
-
-        while True:
-            time.sleep(60)
-    except KeyboardInterrupt:
+        await asyncio.Event().wait()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass
+    finally:
+        if runner.bot:
+            await runner.bot.stop()
         sched.stop()
         print("Scheduler stopped gracefully.")
 

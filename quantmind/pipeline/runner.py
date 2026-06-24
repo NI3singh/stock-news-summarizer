@@ -10,11 +10,18 @@ The five heavy resource imports are deferred into ``__init__`` so that merely
 importing this module (e.g. for the CLI's argparse wiring) stays cheap —
 chromadb / langchain / crawl4ai only load when a runner is actually constructed.
 """
+from __future__ import annotations
+
 import asyncio
+from typing import TYPE_CHECKING
 
 from quantmind.config import settings
 from quantmind.schemas import AgentContext, TickerAnalysis
 from quantmind.utils import logger
+
+if TYPE_CHECKING:  # type-only — instantiated lazily in enable_telegram()
+    from quantmind.integrations.alert_engine import AlertEngine
+    from quantmind.integrations.telegram import QuantMindBot
 
 
 class PipelineRunner:
@@ -37,12 +44,31 @@ class PipelineRunner:
         )
         self._initialized = False
 
+        # Optional Telegram integration (wired by enable_telegram()).
+        self.alert_engine: AlertEngine | None = None
+        self.bot: QuantMindBot | None = None
+
     async def initialize(self) -> None:
         """Create the DB tables once. Idempotent — safe to call repeatedly."""
         if not self._initialized:
             await self.db.init_db()
             self._initialized = True
             logger.info("PipelineRunner initialized")
+
+    def enable_telegram(self) -> None:
+        """Wire up the Telegram bot + alert engine (no-op if creds are unset)."""
+        if not settings.telegram_bot_token or not settings.telegram_chat_id:
+            logger.warning(
+                "Telegram credentials not set — skipping bot initialization"
+            )
+            return
+        from quantmind.integrations.alert_engine import AlertEngine
+        from quantmind.integrations.telegram import QuantMindBot
+
+        self.bot = QuantMindBot(self)
+        self.alert_engine = AlertEngine(self.db)
+        self.orchestrator.set_notifiers(self.alert_engine, self.bot)
+        logger.info("Telegram bot enabled")
 
     async def analyze_ticker(self, ticker: str) -> TickerAnalysis:
         """Scrape + run the full agent pipeline for a single ticker."""

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 import aiosqlite
 
 from quantmind.config import settings
-from quantmind.schemas import Article, TickerAnalysis
+from quantmind.schemas import AlertEvent, AlertRule, Article, TickerAnalysis
 from quantmind.utils import logger
 
 
@@ -76,6 +76,28 @@ _SCHEMA = [
         duration_seconds REAL,
         success INTEGER DEFAULT 1,
         error_message TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS alert_rules (
+        id INTEGER PRIMARY KEY,
+        ticker TEXT,
+        condition_type TEXT NOT NULL,
+        threshold REAL,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_triggered_at TIMESTAMP,
+        delivery_channel TEXT DEFAULT 'telegram'
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS alert_events (
+        id INTEGER PRIMARY KEY,
+        rule_id INTEGER NOT NULL,
+        ticker TEXT NOT NULL,
+        triggered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        message TEXT,
+        delivered INTEGER DEFAULT 0
     )
     """,
 ]
@@ -230,3 +252,64 @@ class DatabaseManager:
             duration,
             success,
         )
+
+    # --- Alert rules / events (Phase B.4) ------------------------------------
+
+    async def add_alert_rule(self, rule: AlertRule) -> int:
+        """Insert an alert rule; return the new row id."""
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """
+                INSERT INTO alert_rules
+                    (ticker, condition_type, threshold, is_active,
+                     last_triggered_at, delivery_channel)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    rule.ticker,
+                    rule.condition_type.value,
+                    rule.threshold,
+                    int(rule.is_active),
+                    _to_naive_iso(rule.last_triggered_at)
+                    if rule.last_triggered_at
+                    else None,
+                    rule.delivery_channel,
+                ),
+            )
+            await db.commit()
+            new_id = cursor.lastrowid
+        logger.debug("alert_rule added: id={} ({})", new_id, rule.condition_type.value)
+        return new_id
+
+    async def get_active_alert_rules(self) -> list[AlertRule]:
+        """Return all active alert rules as AlertRule objects."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM alert_rules WHERE is_active = 1 ORDER BY id"
+            ) as cursor:
+                rows = await cursor.fetchall()
+        # Pydantic coerces the row strings/ints back into the typed fields
+        # (condition_type -> enum, is_active -> bool, timestamps -> datetime).
+        return [AlertRule(**dict(row)) for row in rows]
+
+    async def update_alert_last_triggered(self, rule_id: int) -> None:
+        """Stamp an alert rule's last_triggered_at to now."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE alert_rules SET last_triggered_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (rule_id,),
+            )
+            await db.commit()
+
+    async def log_alert_event(self, event: AlertEvent) -> None:
+        """Persist a fired alert event."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO alert_events (rule_id, ticker, message, delivered)
+                VALUES (?, ?, ?, ?)
+                """,
+                (event.rule_id, event.ticker, event.message, int(event.delivered)),
+            )
+            await db.commit()
