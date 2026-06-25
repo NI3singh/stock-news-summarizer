@@ -2,177 +2,194 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, TrendingUp, Cpu, Bell } from "lucide-react";
-import { Logo }            from "@/components/ui/logo";
-import { Button }          from "@/components/ui/button";
-import { Input }           from "@/components/ui/input";
-import { GoogleButton }    from "@/components/ui/google-button";
-import { OrDivider }       from "@/components/ui/divider";
-import { MarketPreviewCard }  from "@/components/auth/market-preview-card";
-import { MarketIndicesBar }   from "@/components/auth/market-indices-bar";
-import { useAuth }            from "@/lib/auth-context";
-
-const FEATURES = [
-  { icon: <Cpu  className="h-4 w-4" />, color: "bg-qm-green-bg text-qm-green border-qm-green/30", text: "AI-powered news analysis" },
-  { icon: <Bell className="h-4 w-4" />, color: "bg-red-500/10 text-red-400 border-red-500/20",   text: "Real-time market alerts" },
-  { icon: <TrendingUp className="h-4 w-4" />, color: "bg-qm-green-bg text-qm-green border-qm-green/30", text: "Smart portfolio tracking" },
-];
+import { motion } from "framer-motion";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Target, Zap, Cpu } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import StockChart from "@/components/stock-chart";
+import GoogleIcon from "@/components/icons/google-icon";
+import LogoMark from "@/components/icons/logo-mark";
 
 export default function LoginPage() {
   const router = useRouter();
   const { signInEmail, signInGoogle } = useAuth();
-  const [email, setEmail]       = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
+    setIsLoading(true);
     try {
       await signInEmail(email, password);
       router.push("/dashboard");
     } catch {
       setError("Invalid email or password.");
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleGoogle = async () => {
+  const handleGoogleLogin = async () => {
     setError("");
-    setLoading(true);
+    setIsLoading(true);
     try {
       await signInGoogle();
       router.push("/dashboard");
     } catch {
       setError("Google sign-in failed. Please try again.");
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
-
-      {/* ─── LEFT: Marketing Panel ─── */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-10 xl:p-14">
-        <Logo size="md" />
-
-        <div className="space-y-6 animate-fade-in">
-          <div>
-            <h1 className="text-4xl xl:text-5xl font-extrabold text-qm-text leading-tight">
-              Smart Market<br />Intelligence
-            </h1>
-            <p className="text-2xl xl:text-3xl font-bold text-qm-green mt-1">
-              Powered by AI
-            </p>
-          </div>
-
-          <p className="text-qm-text2 text-base leading-relaxed max-w-md">
-            Get real-time AI-powered analysis of stock market news.
-            Make informed decisions with intelligent insights and sentiment analysis.
-          </p>
-
-          <div className="space-y-3">
-            {FEATURES.map((f, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className={`flex items-center justify-center h-8 w-8 rounded-lg border ${f.color} flex-shrink-0`}>
-                  {f.icon}
-                </div>
-                <span className="text-qm-text text-sm font-medium">{f.text}</span>
+    <div className="min-h-screen flex">
+      {/* ─── LEFT: Branding ─── */}
+      <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center p-12">
+        <div className="max-w-lg z-10">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+            <motion.div className="flex items-center gap-3 mb-8" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+              <LogoMark className="w-12 h-12" />
+              <div>
+                <h1 className="text-3xl font-bold text-white leading-none">StockStalker</h1>
+                <span className="text-market-green-400 font-semibold gradient-text">AI</span>
               </div>
-            ))}
-          </div>
-        </div>
+            </motion.div>
 
-        {/* Mini stock preview card */}
-        <div className="max-w-sm animate-fade-in">
-          <MarketPreviewCard />
+            <motion.h2 className="text-4xl font-bold text-white mb-4 leading-tight" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+              Smart Market Intelligence
+              <br />
+              <span className="gradient-text">Powered by AI</span>
+            </motion.h2>
+
+            <motion.p className="text-market-dark-300 text-lg mb-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+              Get real-time AI-powered analysis of stock market news. Make informed decisions with intelligent insights and sentiment analysis.
+            </motion.p>
+
+            <motion.div className="space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+              <FeatureItem icon={<Cpu className="w-5 h-5" />} text="AI-powered news analysis" color="green" />
+              <FeatureItem icon={<Zap className="w-5 h-5" />} text="Real-time market alerts" color="red" />
+              <FeatureItem icon={<Target className="w-5 h-5" />} text="Smart watchlist tracking" color="green" />
+            </motion.div>
+          </motion.div>
+
+          <motion.div className="mt-12" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 0.6 }}>
+            <StockChart />
+          </motion.div>
         </div>
       </div>
 
-      {/* ─── RIGHT: Login Form ─── */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-10">
-
-        {/* Mobile logo */}
-        <div className="lg:hidden mb-8">
-          <Logo size="md" />
-        </div>
-
-        <div className="w-full max-w-md">
-          <div className="rounded-2xl border border-qm-border bg-qm-card p-8 shadow-2xl animate-fade-in">
-
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-qm-text">Welcome back</h2>
-              <p className="text-qm-text3 text-sm mt-1">Sign in to access your dashboard</p>
+      {/* ─── RIGHT: Form ─── */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-12 relative z-10">
+        <motion.div className="w-full max-w-md" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
+          <motion.div className="glass-card rounded-2xl p-8 shadow-card card-border-gradient" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            {/* Mobile logo */}
+            <div className="lg:hidden flex items-center justify-center gap-2 mb-8">
+              <LogoMark className="w-9 h-9" />
+              <span className="text-xl font-bold text-white">
+                Stock<span className="text-market-green-400">Stalker</span>{" "}
+                <span className="text-market-green-400 text-sm gradient-text">AI</span>
+              </span>
             </div>
 
-            <GoogleButton onClick={handleGoogle}>
+            <motion.h2 className="text-2xl font-bold text-white mb-2 text-center lg:text-left" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              Welcome back
+            </motion.h2>
+            <motion.p className="text-market-dark-400 mb-8 text-center lg:text-left" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+              Sign in to access your dashboard
+            </motion.p>
+
+            {error && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 rounded-lg bg-market-red-500/10 border border-market-red-500/30 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-market-red-400 flex-shrink-0" />
+                <p className="text-market-red-400 text-sm">{error}</p>
+              </motion.div>
+            )}
+
+            <motion.button
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border border-market-dark-600 bg-market-dark-800/50 text-white font-medium hover:bg-market-dark-700 hover:border-market-dark-500 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed mb-6 hover-lift"
+              whileTap={{ scale: 0.98 }}
+              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
+            >
+              <GoogleIcon className="w-5 h-5" />
               Continue with Google
-            </GoogleButton>
+            </motion.button>
 
-            <OrDivider />
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-market-dark-600" /></div>
+              <div className="relative flex justify-center text-sm"><span className="px-4 bg-market-dark-800 text-market-dark-400">or continue with email</span></div>
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                label="Email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                leftIcon={<Mail className="h-4 w-4" />}
-                required
-              />
+            <form onSubmit={handleEmailLogin} className="space-y-5" autoComplete="off">
+              <div>
+                <label className="block text-sm font-medium text-market-dark-300 mb-2">Email</label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-market-dark-500 group-focus-within:text-market-green-400 transition-colors" />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" autoComplete="off" className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-market-dark-900/50 border border-market-dark-600 text-white placeholder-market-dark-500 input-market transition-all duration-300 focus:border-market-green-500/50" required />
+                </div>
+              </div>
 
-              <Input
-                label="Password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                leftIcon={<Lock className="h-4 w-4" />}
-                required
-              />
-
-              {error && (
-                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                  {error}
-                </p>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-market-dark-300 mb-2">Password</label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-market-dark-500 group-focus-within:text-market-green-400 transition-colors" />
+                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="new-password" className="w-full pl-12 pr-12 py-3.5 rounded-xl bg-market-dark-900/50 border border-market-dark-600 text-white placeholder-market-dark-500 input-market transition-all duration-300 focus:border-market-green-500/50" required />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-market-dark-500 hover:text-market-dark-300 transition-colors">
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
 
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={e => setRemember(e.target.checked)}
-                    className="h-4 w-4 rounded border-qm-border bg-qm-bg accent-qm-green"
-                  />
-                  <span className="text-sm text-qm-text2">Remember me</span>
+                  <input type="checkbox" className="w-4 h-4 rounded border-market-dark-600 bg-market-dark-900 accent-market-green-500 cursor-pointer" />
+                  <span className="text-sm text-market-dark-400">Remember me</span>
                 </label>
-                <Link href="/forgot-password" className="text-sm text-qm-green hover:text-qm-green-dim transition-colors">
-                  Forgot password?
-                </Link>
+                <Link href="/forgot-password" className="text-sm text-market-green-400 hover:text-market-green-300 transition-colors hover:underline">Forgot password?</Link>
               </div>
 
-              <Button type="submit" size="lg" loading={loading} className="w-full mt-2">
-                Sign In →
-              </Button>
+              <button type="submit" disabled={isLoading} className="w-full py-3.5 px-4 rounded-xl btn-market-green text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                {isLoading ? "Signing in..." : (<>Sign In <ArrowRight className="w-5 h-5" /></>)}
+              </button>
             </form>
 
-            <p className="text-center text-sm text-qm-text3 mt-5">
+            <p className="mt-8 text-center text-market-dark-400">
               Don&apos;t have an account?{" "}
-              <Link href="/signup" className="text-qm-green hover:text-qm-green-dim font-medium transition-colors">
-                Sign up free
-              </Link>
+              <Link href="/signup" className="text-market-green-400 hover:text-market-green-300 font-medium transition-colors hover:underline">Sign up free</Link>
             </p>
+          </motion.div>
 
-            <MarketIndicesBar />
-          </div>
-        </div>
+          {/* Market Stats Footer */}
+          <motion.div className="mt-8 grid grid-cols-3 gap-4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+            <MarketStat label="S&P 500" value="+1.24%" isPositive />
+            <MarketStat label="NASDAQ" value="+0.87%" isPositive />
+            <MarketStat label="DOW" value="-0.32%" isPositive={false} />
+          </motion.div>
+        </motion.div>
       </div>
-
     </div>
+  );
+}
+
+function FeatureItem({ icon, text, color }: { icon: React.ReactNode; text: string; color: "green" | "red" }) {
+  return (
+    <motion.div className="flex items-center gap-3" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} whileHover={{ x: 5 }}>
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color === "green" ? "bg-market-green-500/20 text-market-green-400" : "bg-market-red-500/20 text-market-red-400"}`}>
+        {icon}
+      </div>
+      <span className="text-market-dark-200">{text}</span>
+    </motion.div>
+  );
+}
+
+function MarketStat({ label, value, isPositive }: { label: string; value: string; isPositive: boolean }) {
+  return (
+    <motion.div className="glass-card rounded-lg p-3 text-center hover-lift cursor-pointer" whileHover={{ scale: 1.05 }}>
+      <p className="text-market-dark-400 text-xs mb-1">{label}</p>
+      <p className={`font-semibold ${isPositive ? "text-market-green-400" : "text-market-red-400"}`}>{value}</p>
+    </motion.div>
   );
 }

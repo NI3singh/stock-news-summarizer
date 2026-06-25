@@ -275,6 +275,17 @@ async def cmd_predict(args: argparse.Namespace) -> None:
     print(f"  P(UP): {result['probability_up']:.1%} | P(DOWN): {result['probability_down']:.1%}")
 
 
+async def cmd_api(args: argparse.Namespace) -> None:
+    # Lazy imports — keep fastapi/uvicorn off the fast-CLI / --help path.
+    import uvicorn
+
+    from quantmind.api.main import app
+
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
 # --- Parser ------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -340,6 +351,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     predict_parser.add_argument("ticker", help="Ticker symbol")
 
+    subparsers.add_parser(
+        "api", help="Start the REST API server (FastAPI on port 8000) for the frontend"
+    )
+
     return parser
 
 
@@ -357,6 +372,7 @@ HANDLER_MAP = {
     "ml-status": cmd_ml_status,
     "train-all-models": cmd_train_all_models,
     "predict": cmd_predict,
+    "api": cmd_api,
 }
 
 

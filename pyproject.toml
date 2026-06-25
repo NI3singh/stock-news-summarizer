@@ -46,6 +46,10 @@ dependencies = [
     "scikit-learn>=1.5.0",
     "joblib>=1.4.0",
     "networkx>=3.0",
+    # REST API layer (Phase A) — FastAPI app exposing the engine over HTTP for the frontend
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

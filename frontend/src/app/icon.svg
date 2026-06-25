@@ -1,0 +1,23 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fL" x1="4" y1="52" x2="44" y2="16" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#16a34a"/>
+      <stop offset="0.6" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#4ade80"/>
+    </linearGradient>
+    <linearGradient id="fA" x1="0" y1="14" x2="0" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22c55e" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#22c55e" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- chart -->
+  <path d="M4 52 L10 47 L18 49 L26 39 L34 42 L44 16 L44 58 L4 58Z" fill="url(#fA)"/>
+  <path d="M4 52 L10 47 L18 49 L26 39 L34 42 L44 16" stroke="url(#fL)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- bold scope at the peak (simplified for small sizes) -->
+  <circle cx="44" cy="16" r="9" stroke="#4ade80" stroke-width="2.5"/>
+  <line x1="44" y1="2" x2="44" y2="6" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="44" y1="26" x2="44" y2="30" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="29" y1="16" x2="33" y2="16" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="55" y1="16" x2="59" y2="16" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="44" cy="16" r="3" fill="#4ade80"/>
+</svg>

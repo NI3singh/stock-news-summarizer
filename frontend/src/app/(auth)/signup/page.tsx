@@ -2,256 +2,247 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { User, Mail, Lock, TrendingUp, BarChart3, Bell } from "lucide-react";
-import { Logo }          from "@/components/ui/logo";
-import { Button }        from "@/components/ui/button";
-import { Input }         from "@/components/ui/input";
-import { GoogleButton }  from "@/components/ui/google-button";
-import { OrDivider }     from "@/components/ui/divider";
-import { useAuth }       from "@/lib/auth-context";
-
-const RIGHT_FEATURES = [
-  {
-    icon: <BarChart3 className="h-5 w-5" />,
-    color: "text-qm-green bg-qm-green-bg border-qm-green/20",
-    title: "Real-Time Analysis",
-    desc: "Get instant AI-powered analysis of breaking market news",
-  },
-  {
-    icon: <TrendingUp className="h-5 w-5" />,
-    color: "text-red-400 bg-red-500/10 border-red-500/20",
-    title: "Sentiment Tracking",
-    desc: "Understand market sentiment with advanced AI algorithms",
-  },
-  {
-    icon: <Bell className="h-5 w-5" />,
-    color: "text-qm-green bg-qm-green-bg border-qm-green/20",
-    title: "Custom Watchlists",
-    desc: "Track your favorite stocks and get personalized alerts",
-  },
-];
-
-const STATS = [
-  { value: "10K+", label: "Active Users" },
-  { value: "500+", label: "Stocks Tracked" },
-  { value: "24/7", label: "Market Coverage" },
-];
-
-function PasswordStrengthBar({ password }: { password: string }) {
-  const strength = password.length === 0 ? 0
-    : password.length < 6 ? 1
-    : password.length < 10 ? 2
-    : /[A-Z]/.test(password) && /[0-9]/.test(password) ? 4 : 3;
-
-  const labels  = ["", "Weak", "Fair", "Good", "Strong"];
-  const colors  = ["", "bg-red-500", "bg-amber-500", "bg-qm-green", "bg-qm-green"];
-  const textClr = ["", "text-red-400", "text-amber-400", "text-qm-green", "text-qm-green"];
-
-  if (!password) return null;
-
-  return (
-    <div className="mt-1.5">
-      <div className="flex gap-1 mb-1">
-        {[1, 2, 3, 4].map(i => (
-          <div
-            key={i}
-            className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= strength ? colors[strength] : "bg-qm-border"}`}
-          />
-        ))}
-      </div>
-      <p className={`text-xs font-medium ${textClr[strength]}`}>{labels[strength]}</p>
-    </div>
-  );
-}
+import { motion } from "framer-motion";
+import { Mail, Lock, Eye, EyeOff, User, ArrowRight, AlertCircle, Check, Target, Zap, Cpu } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import GoogleIcon from "@/components/icons/google-icon";
+import LogoMark from "@/components/icons/logo-mark";
 
 export default function SignupPage() {
   const router = useRouter();
   const { signUpEmail, signInGoogle } = useAuth();
-  const [name, setName]           = useState("");
-  const [email, setEmail]         = useState("");
-  const [password, setPassword]   = useState("");
-  const [confirm, setConfirm]     = useState("");
-  const [agreed, setAgreed]       = useState(false);
-  const [loading, setLoading]     = useState(false);
-  const [errors, setErrors]       = useState<Record<string, string>>({});
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [error, setError] = useState("");
 
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!name.trim())         e.name = "Full name is required";
-    if (!email.includes("@")) e.email = "Enter a valid email";
-    if (password.length < 6)  e.password = "Password must be at least 6 characters";
-    if (password !== confirm)  e.confirm = "Passwords do not match";
-    if (!agreed)               e.terms = "You must agree to the terms";
-    return e;
+  const getPasswordStrength = (pass: string) => {
+    let strength = 0;
+    if (pass.length >= 8) strength++;
+    if (/[A-Z]/.test(pass)) strength++;
+    if (/[0-9]/.test(pass)) strength++;
+    if (/[^A-Za-z0-9]/.test(pass)) strength++;
+    return strength;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const passwordStrength = getPasswordStrength(password);
+  const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
+
+  const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    setErrors({});
-    setLoading(true);
+    setError("");
+    if (password !== confirmPassword) { setError("Passwords do not match."); return; }
+    if (!agreeToTerms) { setError("You must agree to the terms."); return; }
+    setIsLoading(true);
     try {
-      await signUpEmail(name, email, password);
+      await signUpEmail(displayName, email, password);
       router.push("/dashboard");
     } catch {
-      setLoading(false);
-      setErrors({ email: "Account creation failed. Please try again." });
+      setError("Account creation failed. Please try again.");
+      setIsLoading(false);
     }
   };
 
-  const handleGoogle = async () => {
-    setLoading(true);
+  const handleGoogleSignup = async () => {
+    setError("");
+    setIsLoading(true);
     try {
       await signInGoogle();
       router.push("/dashboard");
     } catch {
-      setLoading(false);
-      setErrors({ email: "Google sign-up failed. Please try again." });
+      setError("Google sign-up failed. Please try again.");
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
-
+    <div className="min-h-screen flex">
       {/* ─── LEFT: Signup Form ─── */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-10 order-2 lg:order-1">
-        <div className="w-full max-w-md">
-
-          {/* Logo centered for signup card */}
-          <div className="flex justify-center mb-6">
-            <Logo size="md" />
-          </div>
-
-          <div className="rounded-2xl border border-qm-border bg-qm-card p-8 shadow-2xl animate-fade-in">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-qm-text">Create your account</h2>
-              <p className="text-qm-text3 text-sm mt-1">Join thousands of smart investors</p>
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-12 relative z-10">
+        <motion.div className="w-full max-w-md" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
+          <motion.div className="glass-card rounded-2xl p-8 shadow-card card-border-gradient" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            {/* Logo */}
+            <div className="flex items-center justify-center gap-2 mb-8">
+              <LogoMark className="w-9 h-9" />
+              <span className="text-xl font-bold text-white">
+                Stock<span className="text-market-green-400">Stalker</span>{" "}
+                <span className="text-market-green-400 text-sm gradient-text">AI</span>
+              </span>
             </div>
 
-            <GoogleButton onClick={handleGoogle}>Sign up with Google</GoogleButton>
-            <OrDivider text="or sign up with email" />
+            <motion.h2 className="text-2xl font-bold text-white mb-2 text-center" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              Create your account
+            </motion.h2>
+            <motion.p className="text-market-dark-400 mb-8 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+              Join thousands of smart investors
+            </motion.p>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                label="Full Name"
-                type="text"
-                placeholder="Enter your name"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                leftIcon={<User className="h-4 w-4" />}
-                error={errors.name}
-              />
+            {error && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 p-4 rounded-lg bg-market-red-500/10 border border-market-red-500/30 flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-market-red-400 flex-shrink-0" />
+                <p className="text-market-red-400 text-sm">{error}</p>
+              </motion.div>
+            )}
 
-              <Input
-                label="Email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                leftIcon={<Mail className="h-4 w-4" />}
-                error={errors.email}
-              />
+            <motion.button
+              onClick={handleGoogleSignup}
+              disabled={isLoading}
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border border-market-dark-600 bg-market-dark-800/50 text-white font-medium hover:bg-market-dark-700 hover:border-market-dark-500 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed mb-6 hover-lift"
+              whileTap={{ scale: 0.98 }}
+              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
+            >
+              <GoogleIcon className="w-5 h-5" />
+              Sign up with Google
+            </motion.button>
 
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-market-dark-600" /></div>
+              <div className="relative flex justify-center text-sm"><span className="px-4 bg-market-dark-800 text-market-dark-400">or sign up with email</span></div>
+            </div>
+
+            <form onSubmit={handleEmailSignup} className="space-y-4" autoComplete="off">
               <div>
-                <Input
-                  label="Password"
-                  type="password"
-                  placeholder="Create a strong password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  leftIcon={<Lock className="h-4 w-4" />}
-                  error={errors.password}
-                />
-                <PasswordStrengthBar password={password} />
+                <label className="block text-sm font-medium text-market-dark-300 mb-2">Full Name</label>
+                <div className="relative group">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-market-dark-500 group-focus-within:text-market-green-400 transition-colors" />
+                  <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Enter your name" autoComplete="off" className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-market-dark-900/50 border border-market-dark-600 text-white placeholder-market-dark-500 input-market transition-all duration-300 focus:border-market-green-500/50" required />
+                </div>
               </div>
 
-              <Input
-                label="Confirm Password"
-                type="password"
-                placeholder="Confirm your password"
-                value={confirm}
-                onChange={e => setConfirm(e.target.value)}
-                leftIcon={<Lock className="h-4 w-4" />}
-                error={errors.confirm}
-              />
-
               <div>
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={agreed}
-                    onChange={e => setAgreed(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-qm-border bg-qm-bg accent-qm-green flex-shrink-0"
-                  />
-                  <span className="text-sm text-qm-text2">
-                    I agree to the{" "}
-                    <Link href="#" className="text-qm-green hover:underline">Terms of Service</Link>
-                    {" "}and{" "}
-                    <Link href="#" className="text-qm-green hover:underline">Privacy Policy</Link>
-                  </span>
-                </label>
-                {errors.terms && <p className="text-xs text-red-400 mt-1">{errors.terms}</p>}
+                <label className="block text-sm font-medium text-market-dark-300 mb-2">Email</label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-market-dark-500 group-focus-within:text-market-green-400 transition-colors" />
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" autoComplete="off" className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-market-dark-900/50 border border-market-dark-600 text-white placeholder-market-dark-500 input-market transition-all duration-300 focus:border-market-green-500/50" required />
+                </div>
               </div>
 
-              <Button type="submit" size="lg" loading={loading} className="w-full mt-2">
-                Create Account →
-              </Button>
+              <div>
+                <label className="block text-sm font-medium text-market-dark-300 mb-2">Password</label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-market-dark-500 group-focus-within:text-market-green-400 transition-colors" />
+                  <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password" autoComplete="new-password" className="w-full pl-12 pr-12 py-3.5 rounded-xl bg-market-dark-900/50 border border-market-dark-600 text-white placeholder-market-dark-500 input-market transition-all duration-300 focus:border-market-green-500/50" required minLength={6} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-market-dark-500 hover:text-market-dark-300 transition-colors">
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+                {password.length > 0 && (
+                  <motion.div className="mt-2" initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}>
+                    <div className="flex gap-1 mb-1">
+                      {[1, 2, 3, 4].map((level) => (
+                        <div key={level} className={`h-1 flex-1 rounded-full transition-colors ${
+                          passwordStrength >= level
+                            ? passwordStrength <= 1 ? "bg-market-red-500" : passwordStrength === 2 ? "bg-yellow-500" : "bg-market-green-500"
+                            : "bg-market-dark-700"
+                        }`} />
+                      ))}
+                    </div>
+                    <p className={`text-xs ${passwordStrength <= 1 ? "text-market-red-400" : passwordStrength === 2 ? "text-yellow-400" : "text-market-green-400"}`}>
+                      {passwordStrength <= 1 ? "Weak" : passwordStrength === 2 ? "Fair" : passwordStrength === 3 ? "Good" : "Strong"}
+                    </p>
+                  </motion.div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-market-dark-300 mb-2">Confirm Password</label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-market-dark-500 group-focus-within:text-market-green-400 transition-colors" />
+                  <input type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm your password" autoComplete="new-password"
+                    className={`w-full pl-12 pr-12 py-3.5 rounded-xl bg-market-dark-900/50 border text-white placeholder-market-dark-500 input-market transition-all duration-300 ${
+                      confirmPassword.length > 0 ? (passwordsMatch ? "border-market-green-500" : "border-market-red-500") : "border-market-dark-600 focus:border-market-green-500/50"
+                    }`} required />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-market-dark-500 hover:text-market-dark-300 transition-colors">
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                  {confirmPassword.length > 0 && passwordsMatch && (
+                    <Check className="absolute right-12 top-1/2 -translate-y-1/2 w-5 h-5 text-market-green-400" />
+                  )}
+                </div>
+                {confirmPassword.length > 0 && !passwordsMatch && (
+                  <p className="text-market-red-400 text-xs mt-1">Passwords don&apos;t match</p>
+                )}
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer mt-4">
+                <input type="checkbox" checked={agreeToTerms} onChange={(e) => setAgreeToTerms(e.target.checked)} className="w-5 h-5 mt-0.5 rounded border-market-dark-600 bg-market-dark-900 accent-market-green-500 cursor-pointer" required />
+                <span className="text-sm text-market-dark-400">
+                  I agree to the{" "}
+                  <Link href="#" className="text-market-green-400 hover:text-market-green-300 transition-colors hover:underline">Terms of Service</Link>
+                  {" "}and{" "}
+                  <Link href="#" className="text-market-green-400 hover:text-market-green-300 transition-colors hover:underline">Privacy Policy</Link>
+                </span>
+              </label>
+
+              <button type="submit" disabled={isLoading || !passwordsMatch || !agreeToTerms} className="w-full py-3.5 px-4 rounded-xl btn-market-green text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-6">
+                {isLoading ? "Creating account..." : (<>Create Account <ArrowRight className="w-5 h-5" /></>)}
+              </button>
             </form>
 
-            <p className="text-center text-sm text-qm-text3 mt-5">
+            <p className="mt-8 text-center text-market-dark-400">
               Already have an account?{" "}
-              <Link href="/login" className="text-qm-green hover:text-qm-green-dim font-medium transition-colors">
-                Sign in
-              </Link>
+              <Link href="/login" className="text-market-green-400 hover:text-market-green-300 font-medium transition-colors hover:underline">Sign in</Link>
             </p>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </div>
 
-      {/* ─── RIGHT: Marketing Panel ─── */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-10 xl:p-14 order-1 lg:order-2">
-        <div className="max-w-md animate-fade-in">
-          <h2 className="text-4xl xl:text-5xl font-extrabold text-qm-text leading-tight">
-            Start your journey to
-          </h2>
-          <p className="text-4xl xl:text-5xl font-extrabold text-qm-green mt-1">
-            smarter investing
-          </p>
-          <p className="text-qm-text2 text-base mt-4 leading-relaxed">
-            Get instant access to AI-powered market intelligence and
-            never miss a market-moving news event again.
-          </p>
+      {/* ─── RIGHT: Benefits ─── */}
+      <div className="hidden lg:flex lg:w-1/2 relative items-center justify-center p-12">
+        <div className="max-w-lg z-10">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+            <motion.h2 className="text-4xl font-bold text-white mb-6 leading-tight" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+              Start your journey to
+              <br />
+              <span className="gradient-text">smarter investing</span>
+            </motion.h2>
 
-          <div className="space-y-3 mt-8">
-            {RIGHT_FEATURES.map((f, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-4 p-4 rounded-xl border border-qm-border bg-qm-card/60"
-              >
-                <div className={`flex items-center justify-center h-10 w-10 rounded-lg border flex-shrink-0 ${f.color}`}>
-                  {f.icon}
-                </div>
-                <div>
-                  <div className="font-semibold text-qm-text text-sm">{f.title}</div>
-                  <div className="text-qm-text3 text-xs mt-0.5">{f.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+            <motion.p className="text-market-dark-300 text-lg mb-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
+              Get instant access to AI-powered market intelligence and never miss a market-moving news event again.
+            </motion.p>
 
-          {/* Stats strip */}
-          <div className="flex gap-8 mt-8 pt-6 border-t border-qm-border">
-            {STATS.map((s, i) => (
-              <div key={i}>
-                <div className="text-2xl font-extrabold text-qm-green">{s.value}</div>
-                <div className="text-xs text-qm-text3 mt-0.5">{s.label}</div>
-              </div>
-            ))}
-          </div>
+            <motion.div className="space-y-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
+              <BenefitCard icon={<Cpu className="w-6 h-6" />} title="Real-Time Analysis" description="Get instant AI-powered analysis of breaking market news" color="green" />
+              <BenefitCard icon={<Zap className="w-6 h-6" />} title="Sentiment Tracking" description="Understand market sentiment with advanced AI algorithms" color="red" />
+              <BenefitCard icon={<Target className="w-6 h-6" />} title="Custom Watchlists" description="Track your favorite stocks and get personalized alerts" color="green" />
+            </motion.div>
+
+            <motion.div className="mt-12 grid grid-cols-3 gap-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.6 }}>
+              <StatCard value="4" label="AI Agents" />
+              <StatCard value="3+" label="News Sources" />
+              <StatCard value="Gemini" label="AI Engine" />
+            </motion.div>
+          </motion.div>
         </div>
       </div>
+    </div>
+  );
+}
 
+function BenefitCard({ icon, title, description, color }: { icon: React.ReactNode; title: string; description: string; color: "green" | "red" }) {
+  return (
+    <motion.div className="flex items-start gap-4 glass-card rounded-xl p-4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} whileHover={{ x: 5 }}>
+      <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${color === "green" ? "bg-market-green-500/20 text-market-green-400" : "bg-market-red-500/20 text-market-red-400"}`}>
+        {icon}
+      </div>
+      <div>
+        <h3 className="text-white font-semibold mb-1">{title}</h3>
+        <p className="text-market-dark-400 text-sm">{description}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function StatCard({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-center">
+      <p className="text-2xl font-bold text-market-green-400 mb-1">{value}</p>
+      <p className="text-market-dark-400 text-sm">{label}</p>
     </div>
   );
 }
