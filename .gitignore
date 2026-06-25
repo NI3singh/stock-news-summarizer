@@ -39,3 +39,6 @@ quantmind_chroma/
 quantmind.db
 logs/
 quantmind_models/
+
+frontend-plan/*
+frontend-plan/
