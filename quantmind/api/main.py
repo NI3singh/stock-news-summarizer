@@ -195,13 +195,24 @@ async def agent_runs(limit: int = 50):
 
 @app.get("/api/alerts/status")
 async def telegram_status():
+    runner = get_runner()
     connected = bool(settings.telegram_chat_id and settings.telegram_bot_token)
-    return {"connected": connected, "chat_id": settings.telegram_chat_id or None}
+    bot_username = None
+    if runner.bot is not None:
+        try:
+            bot_username = runner.bot.app.bot.username
+        except Exception:  # noqa: BLE001 — username unavailable until the bot is initialized
+            bot_username = None
+    return {
+        "connected": connected,
+        "chat_id": settings.telegram_chat_id or None,
+        "bot_username": bot_username,
+    }
 
 
 @app.get("/api/alerts/rules")
 async def get_alert_rules():
-    rules = await get_runner().db.get_active_alert_rules()
+    rules = await get_runner().db.get_all_alert_rules()
     return {"rules": [r.model_dump(mode="json") for r in rules]}
 
 
@@ -238,6 +249,19 @@ async def send_test_notification():
         return {"success": True, "message": "Test notification sent"}
     except Exception as exc:  # noqa: BLE001
         return {"success": False, "message": f"Send failed: {exc}"}
+
+
+@app.patch("/api/alerts/rules/{rule_id}")
+async def update_alert_rule(rule_id: int, payload: dict):
+    active = bool(payload.get("is_active", True))
+    await get_runner().db.set_alert_rule_active(rule_id, active)
+    return {"success": True}
+
+
+@app.get("/api/alerts/events")
+async def get_alert_events():
+    events = await get_runner().db.get_recent_alert_events(limit=20)
+    return {"events": events}
 
 
 # --- Background job helpers ---

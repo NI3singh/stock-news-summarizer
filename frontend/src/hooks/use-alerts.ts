@@ -31,3 +31,22 @@ export function useDeleteAlertRule() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ALERT_RULES_KEY }),
   });
 }
+
+export function useToggleAlertRule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
+      api.updateAlertRule(id, is_active),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ALERT_RULES_KEY }),
+  });
+}
+
+export const ALERT_EVENTS_KEY = ["alert-events"];
+
+export function useAlertEvents() {
+  return useQuery({
+    queryKey: ALERT_EVENTS_KEY,
+    queryFn: api.getAlertEvents,
+    select: (d) => d.events,
+  });
+}

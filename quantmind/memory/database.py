@@ -379,6 +379,32 @@ class DatabaseManager:
             )
             await db.commit()
 
+    async def get_all_alert_rules(self) -> list[AlertRule]:
+        """Return ALL alert rules (active + inactive), newest first — for the manager UI."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT * FROM alert_rules ORDER BY id DESC") as cursor:
+                rows = await cursor.fetchall()
+        return [AlertRule(**dict(row)) for row in rows]
+
+    async def set_alert_rule_active(self, rule_id: int, active: bool) -> None:
+        """Activate / pause an alert rule (toggle is_active)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE alert_rules SET is_active = ? WHERE id = ?", (int(active), rule_id)
+            )
+            await db.commit()
+
+    async def get_recent_alert_events(self, limit: int = 20) -> list[dict]:
+        """Return the most recently triggered alert events (newest first)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM alert_events ORDER BY triggered_at DESC LIMIT ?", (limit,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
     async def log_alert_event(self, event: AlertEvent) -> None:
         """Persist a fired alert event."""
         async with aiosqlite.connect(self.db_path) as db:

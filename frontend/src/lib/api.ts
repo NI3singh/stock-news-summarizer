@@ -1,5 +1,6 @@
 import type {
   AgentRun,
+  AlertEvent,
   AlertRule,
   AlertStatus,
   JobResponse,
@@ -63,6 +64,16 @@ export const api = {
   deleteAlertRule: (id: number): Promise<{ success: boolean }> =>
     fetch(`${BASE}/api/alerts/rules/${id}`, { method: "DELETE" }).then((r) => r.json()),
 
+  updateAlertRule: (id: number, is_active: boolean): Promise<{ success: boolean }> =>
+    fetch(`${BASE}/api/alerts/rules/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active }),
+    }).then((r) => r.json()),
+
   sendTestNotification: (): Promise<{ success: boolean; message: string }> =>
     fetch(`${BASE}/api/alerts/test`, { method: "POST" }).then((r) => r.json()),
+
+  getAlertEvents: (): Promise<{ events: AlertEvent[] }> =>
+    fetch(`${BASE}/api/alerts/events`).then((r) => r.json()),
 };

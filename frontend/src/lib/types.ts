@@ -147,4 +147,14 @@ export interface AlertRule {
 export interface AlertStatus {
   connected: boolean;
   chat_id: string | null;
+  bot_username: string | null;
+}
+
+export interface AlertEvent {
+  id: number;
+  rule_id: number;
+  ticker: string;
+  triggered_at: string;
+  message: string | null;
+  delivered: number; // 0/1 in SQLite
 }
