@@ -7,6 +7,8 @@ import { SentimentGauge } from "@/components/dashboard/sentiment-gauge";
 import { WhatChangedBox } from "@/components/dashboard/what-changed-box";
 import { SourceArticles } from "@/components/dashboard/source-articles";
 import { HistoryAccordion } from "@/components/dashboard/history-accordion";
+import { KeyThemes } from "@/components/dashboard/key-themes";
+import { QuantSignals } from "@/components/dashboard/quant-signals";
 import { useRefreshTicker } from "@/hooks/use-refresh";
 import { useDashboardStore } from "@/stores/dashboard-store";
 
@@ -76,6 +78,11 @@ export function CenterPanel({
             <SentimentGauge score={latest.sentiment_score ?? 0} size="lg" />
           </div>
 
+          {/* Key themes */}
+          {latest.key_themes && latest.key_themes.length > 0 && (
+            <KeyThemes themes={latest.key_themes} />
+          )}
+
           {/* What changed */}
           {latest.what_changed && <WhatChangedBox text={latest.what_changed} />}
 
@@ -95,11 +102,18 @@ export function CenterPanel({
             </section>
           )}
 
-          {/* Technical signals — interpretation text (raw signals are not persisted) */}
-          {latest.quant_interpretation && (
+          {/* Technical signals — cards (when persisted) + interpretation text */}
+          {(latest.technical_signals || latest.quant_interpretation) && (
             <section>
               <h2 className="mb-2 text-sm font-semibold text-qm-text">📈 Technical Signals</h2>
-              <p className="text-sm leading-7 text-qm-text2">{latest.quant_interpretation}</p>
+              {latest.technical_signals && (
+                <div className="mb-3">
+                  <QuantSignals signals={latest.technical_signals} />
+                </div>
+              )}
+              {latest.quant_interpretation && (
+                <p className="text-sm leading-7 text-qm-text2">{latest.quant_interpretation}</p>
+              )}
             </section>
           )}
 

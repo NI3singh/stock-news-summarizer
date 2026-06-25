@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export const TICKERS_KEY = ["tickers"];
-export const SUMMARY_KEY = (symbol: string) => ["summary", symbol];
+export const SUMMARY_KEY = (symbol: string, days = 7) => ["summary", symbol, days];
+// Prefix (no days window) — use for invalidation so every cached day-window clears.
+export const SUMMARY_PREFIX = (symbol: string) => ["summary", symbol];
 
 export function useTickers() {
   return useQuery({
@@ -12,10 +14,10 @@ export function useTickers() {
   });
 }
 
-export function useSummary(symbol: string | null) {
+export function useSummary(symbol: string | null, days = 7) {
   return useQuery({
-    queryKey: SUMMARY_KEY(symbol ?? ""),
-    queryFn: () => api.getSummary(symbol!),
+    queryKey: SUMMARY_KEY(symbol ?? "", days),
+    queryFn: () => api.getSummary(symbol!, days),
     enabled: !!symbol,
   });
 }

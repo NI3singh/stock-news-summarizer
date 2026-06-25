@@ -39,7 +39,7 @@ function StatCard({
 export default function TickerDetailPage() {
   const params = useParams();
   const ticker = String(params.ticker ?? "").toUpperCase();
-  const { data, isLoading } = useSummary(ticker);
+  const { data, isLoading } = useSummary(ticker, 30);
   const { data: allRuns } = useAgentRuns(50);
   const refresh = useRefreshTicker();
   const processing = useDashboardStore((s) => s.processingTickers.has(ticker));
@@ -50,10 +50,7 @@ export default function TickerDetailPage() {
   const tickerRuns = (allRuns ?? []).filter((r) => r.ticker === ticker);
 
   const sentiment = latest?.sentiment_score ?? null;
-  const days = latest?.memory_context?.days_of_history ?? null;
-  const avg7 = history.length
-    ? history.reduce((a, s) => a + (s.sentiment_score ?? 0), 0) / history.length
-    : null;
+  const sig = latest?.technical_signals ?? null;
 
   const refreshButton = (
     <button
@@ -108,14 +105,31 @@ export default function TickerDetailPage() {
               }
               valueClass={sentiment == null ? "" : sentiment >= 0 ? "text-qm-green" : "text-qm-red"}
             />
-            <StatCard label="Articles" value={String(articles.length)} sub="analyzed" />
-            <StatCard label="History" value={days == null ? "—" : String(days)} sub="days tracked" />
             <StatCard
-              label="Avg Sentiment"
-              value={avg7 == null ? "—" : `${avg7 >= 0 ? "+" : ""}${avg7.toFixed(2)}`}
-              sub="last 7 days"
-              valueClass={avg7 == null ? "" : avg7 >= 0 ? "text-qm-green" : "text-qm-red"}
+              label="RSI"
+              value={sig?.rsi == null ? "N/A" : sig.rsi.toFixed(1)}
+              sub={
+                sig?.rsi == null
+                  ? undefined
+                  : sig.rsi > 70
+                    ? "Overbought"
+                    : sig.rsi < 30
+                      ? "Oversold"
+                      : "Neutral"
+              }
             />
+            <StatCard
+              label="Volume"
+              value={sig?.volume_ratio == null ? "N/A" : `${sig.volume_ratio.toFixed(1)}x`}
+              sub={
+                sig?.volume_ratio == null
+                  ? undefined
+                  : sig.volume_ratio > 1
+                    ? "Above avg"
+                    : "Below avg"
+              }
+            />
+            <StatCard label="Articles" value={String(articles.length)} sub="analyzed" />
           </div>
 
           {/* ROW 2 — charts */}
@@ -127,7 +141,7 @@ export default function TickerDetailPage() {
             <div className="flex flex-col rounded-xl border border-qm-border bg-qm-card p-4">
               <h2 className="mb-3 text-sm font-semibold text-qm-text">Technical (RSI)</h2>
               <div className="flex flex-1 items-center justify-center">
-                <RsiGauge value={null} />
+                <RsiGauge value={sig?.rsi ?? null} />
               </div>
             </div>
           </div>

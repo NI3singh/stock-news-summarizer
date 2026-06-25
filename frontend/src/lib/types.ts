@@ -84,6 +84,8 @@ export interface SummaryRow {
   sentiment_score: number | null;
   articles_used: Article[];
   memory_context: MemoryContext | null;
+  key_themes: string[] | null;
+  technical_signals: TechnicalSignals | null;
 }
 
 export interface SummaryResponse {
@@ -122,4 +124,27 @@ export interface AgentRun {
   duration_seconds: number | null;
   success: number; // stored as 0/1 in SQLite
   error_message: string | null;
+}
+
+// --- Alerts (Phase B) ---
+export type AlertConditionType =
+  | "sentiment_below"
+  | "sentiment_above"
+  | "new_sec_filing"
+  | "daily_summary";
+
+export interface AlertRule {
+  id: number | null;
+  ticker: string | null; // null = any ticker
+  condition_type: AlertConditionType;
+  threshold: number | null;
+  is_active: boolean;
+  created_at: string;
+  last_triggered_at: string | null;
+  delivery_channel: string;
+}
+
+export interface AlertStatus {
+  connected: boolean;
+  chat_id: string | null;
 }

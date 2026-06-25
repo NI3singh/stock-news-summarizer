@@ -71,7 +71,9 @@ _SCHEMA = [
         final_synthesis TEXT,
         sentiment_score REAL,
         articles_used TEXT,
-        memory_context TEXT
+        memory_context TEXT,
+        key_themes TEXT,
+        technical_signals TEXT
     )
     """,
     """
@@ -133,6 +135,14 @@ _SCHEMA = [
     """,
 ]
 
+# Idempotent column additions for pre-existing DBs (CREATE TABLE IF NOT EXISTS
+# won't alter an already-created analyses table). Each runs once; a "duplicate
+# column" OperationalError is caught and ignored in init_db().
+_MIGRATIONS = [
+    "ALTER TABLE analyses ADD COLUMN key_themes TEXT",
+    "ALTER TABLE analyses ADD COLUMN technical_signals TEXT",
+]
+
 
 class DatabaseManager:
     """Async data-access layer over a SQLite database file."""
@@ -146,6 +156,11 @@ class DatabaseManager:
         async with aiosqlite.connect(self.db_path) as db:
             for statement in _SCHEMA:
                 await db.execute(statement)
+            for migration in _MIGRATIONS:
+                try:
+                    await db.execute(migration)
+                except sqlite3.OperationalError:
+                    pass  # column already exists
             await db.commit()
         logger.debug("Database initialised at {}", self.db_path)
 
@@ -206,14 +221,20 @@ class DatabaseManager:
         )
         memory_context = analysis.memory.model_dump_json()
         quant_interpretation = analysis.quant.interpretation if analysis.quant else None
+        key_themes = json.dumps(analysis.news.key_themes)
+        technical_signals = (
+            json.dumps(analysis.quant.signals.model_dump(mode="json"))
+            if analysis.quant
+            else None
+        )
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
                 INSERT INTO analyses (
                     ticker, analyzed_at, news_summary, what_changed,
                     quant_interpretation, final_synthesis, sentiment_score,
-                    articles_used, memory_context
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    articles_used, memory_context, key_themes, technical_signals
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticker,
@@ -225,6 +246,8 @@ class DatabaseManager:
                     analysis.news.sentiment_score,
                     articles_used,
                     memory_context,
+                    key_themes,
+                    technical_signals,
                 ),
             )
             await db.commit()
@@ -264,7 +287,7 @@ class DatabaseManager:
         for row in rows:
             record = dict(row)
             # Best-effort: decode JSON columns back into Python structures.
-            for col in ("articles_used", "memory_context"):
+            for col in ("articles_used", "memory_context", "key_themes", "technical_signals"):
                 if record.get(col):
                     try:
                         record[col] = json.loads(record[col])
@@ -345,6 +368,14 @@ class DatabaseManager:
             await db.execute(
                 "UPDATE alert_rules SET last_triggered_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (rule_id,),
+            )
+            await db.commit()
+
+    async def deactivate_alert_rule(self, rule_id: int) -> None:
+        """Soft-delete an alert rule (set is_active = 0)."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE alert_rules SET is_active = 0 WHERE id = ?", (rule_id,)
             )
             await db.commit()
 

@@ -131,7 +131,11 @@ export default function HistoryPage() {
                       ? "—"
                       : `${sc >= 0 ? "+" : ""}${sc.toFixed(2)} ${sc > 0.2 ? "▲" : sc < -0.2 ? "▼" : "·"}`}
                   </span>
-                  <span className="text-qm-text3">—</span>
+                  <span className="truncate text-qm-text3">
+                    {r.key_themes && r.key_themes.length
+                      ? r.key_themes.slice(0, 2).join(", ")
+                      : "—"}
+                  </span>
                   <span className="text-qm-text2">{r.sources}</span>
                 </button>
                 {isOpen && r.what_changed && (

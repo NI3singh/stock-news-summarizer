@@ -13,7 +13,7 @@ from threading import Lock
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from quantmind.config import settings
 from quantmind.utils import logger
@@ -33,8 +33,23 @@ async def lifespan(app: FastAPI):
     await _runner.initialize()
     # ML (prediction + entity extraction) is auto-enabled inside the
     # OrchestratorAgent constructor, so there is no separate enable step.
+    # Enable Telegram if creds are set (no-op otherwise) + initialize the bot's
+    # HTTP client so /api/alerts/test can send. Guarded so a bad/unreachable
+    # token can't crash API startup.
+    _runner.enable_telegram()
+    if _runner.bot is not None:
+        try:
+            await _runner.bot.app.initialize()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Telegram bot init failed ({}); send disabled.", exc)
+            _runner.bot = None
     logger.info("QuantMind API started")
     yield
+    if _runner.bot is not None:
+        try:
+            await _runner.bot.app.shutdown()
+        except Exception:  # noqa: BLE001
+            pass
     logger.info("QuantMind API shutting down")
 
 
@@ -92,12 +107,13 @@ async def remove_ticker(symbol: str):
 
 
 @app.get("/api/summary/{symbol}")
-async def get_summary(symbol: str):
+async def get_summary(symbol: str, days: int = 7):
     runner = get_runner()
     symbol = symbol.upper()
-    # get_recent_analyses returns newest-first and already JSON-decodes
-    # articles_used / memory_context back into Python structures.
-    recent = await runner.db.get_recent_analyses(symbol, days=7)
+    days = max(1, min(days, 90))
+    # get_recent_analyses returns newest-first and already JSON-decodes the JSON
+    # columns (articles_used / memory_context / key_themes / technical_signals).
+    recent = await runner.db.get_recent_analyses(symbol, days=days)
     latest = recent[0] if recent else None
     articles = latest.get("articles_used", []) if latest else []
     return {
@@ -173,6 +189,55 @@ async def agent_runs(limit: int = 50):
         )
         rows = [dict(r) for r in await cur.fetchall()]
     return {"runs": rows}
+
+
+# --- Alerts (Phase B) ---
+
+@app.get("/api/alerts/status")
+async def telegram_status():
+    connected = bool(settings.telegram_chat_id and settings.telegram_bot_token)
+    return {"connected": connected, "chat_id": settings.telegram_chat_id or None}
+
+
+@app.get("/api/alerts/rules")
+async def get_alert_rules():
+    rules = await get_runner().db.get_active_alert_rules()
+    return {"rules": [r.model_dump(mode="json") for r in rules]}
+
+
+@app.post("/api/alerts/rules")
+async def create_alert_rule(rule_data: dict):
+    from quantmind.schemas import AlertRule
+
+    try:
+        rule = AlertRule(**rule_data)
+    except (ValidationError, TypeError) as exc:
+        raise HTTPException(400, f"Invalid rule: {exc}")
+    rule_id = await get_runner().db.add_alert_rule(rule)
+    return {"success": True, "rule_id": rule_id}
+
+
+@app.delete("/api/alerts/rules/{rule_id}")
+async def delete_alert_rule(rule_id: int):
+    await get_runner().db.deactivate_alert_rule(rule_id)
+    return {"success": True}
+
+
+@app.post("/api/alerts/test")
+async def send_test_notification():
+    runner = get_runner()
+    if runner.bot is None:
+        return {
+            "success": False,
+            "message": "Telegram bot not initialized (set bot token + chat ID, then restart the API).",
+        }
+    if not settings.telegram_chat_id:
+        return {"success": False, "message": "No Telegram chat connected yet."}
+    try:
+        await runner.bot.send_message("🤖 QuantMind test notification — connection working!")
+        return {"success": True, "message": "Test notification sent"}
+    except Exception as exc:  # noqa: BLE001
+        return {"success": False, "message": f"Send failed: {exc}"}
 
 
 # --- Background job helpers ---

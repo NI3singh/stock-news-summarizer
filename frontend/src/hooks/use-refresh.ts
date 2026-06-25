@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useDashboardStore } from "@/stores/dashboard-store";
-import { SUMMARY_KEY } from "@/hooks/use-tickers";
+import { SUMMARY_PREFIX } from "@/hooks/use-tickers";
 
 /**
  * Returns a callback that refreshes a ticker: fires the analysis job, marks the
@@ -36,7 +36,7 @@ export function useRefreshTicker() {
         if (job.status === "done") {
           clearInterval(poll);
           removeProcessingTicker(symbol);
-          qc.invalidateQueries({ queryKey: SUMMARY_KEY(symbol) });
+          qc.invalidateQueries({ queryKey: SUMMARY_PREFIX(symbol) });
           addNotification(`${symbol} updated`, "success");
         } else if (job.status === "failed") {
           clearInterval(poll);
@@ -96,7 +96,7 @@ export function useRefreshAll() {
               remaining.delete(symbol);
               removeProcessingTicker(symbol);
               if (job.status === "done") {
-                qc.invalidateQueries({ queryKey: SUMMARY_KEY(symbol) });
+                qc.invalidateQueries({ queryKey: SUMMARY_PREFIX(symbol) });
               }
             }
           } catch {
