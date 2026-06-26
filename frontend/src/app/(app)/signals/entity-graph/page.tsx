@@ -1,11 +1,11 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useTickers } from "@/hooks/use-tickers";
 import { EntityGraphFlow } from "@/components/charts/entity-graph";
+import { SignalsTabs } from "@/components/signals/signals-tabs";
 
 const LEGEND = [
   { label: "Company", color: "#3b82f6" },
@@ -64,15 +64,7 @@ export default function EntityGraphPage() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-qm-border px-6 py-3">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/signals"
-            className="flex items-center gap-1 text-sm text-qm-text3 transition-colors hover:text-qm-text2"
-          >
-            <ArrowLeft className="h-4 w-4" /> Signals
-          </Link>
-          <h1 className="text-lg font-bold text-qm-text">Entity Graph</h1>
-        </div>
+        <SignalsTabs />
         <select
           value={ticker}
           onChange={(e) => {

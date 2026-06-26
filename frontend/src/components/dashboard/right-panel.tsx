@@ -1,6 +1,9 @@
 "use client";
 import { cn } from "@/lib/utils";
 import { useAgentRuns, useSystemStatus } from "@/hooks/use-system";
+import { useMlPrediction } from "@/hooks/use-ml";
+import { useDashboardStore } from "@/stores/dashboard-store";
+import { MlSignalCard } from "@/components/dashboard/ml-signal-card";
 
 // Static indices for now — Phase G wires live market data.
 const INDICES = [
@@ -33,9 +36,16 @@ export function RightPanel() {
   const { data: status } = useSystemStatus();
   const { data: runs } = useAgentRuns(8);
   const recentRuns = (runs ?? []).slice(0, 4);
+  const selectedTicker = useDashboardStore((s) => s.selectedTicker);
+  const { data: mlSignal } = useMlPrediction(selectedTicker);
 
   return (
     <aside className="hidden w-[280px] flex-shrink-0 overflow-y-auto border-l border-qm-border p-5 lg:block">
+      {mlSignal?.available && (
+        <div className="mb-6">
+          <MlSignalCard signal={mlSignal} />
+        </div>
+      )}
       <Section title="Market Pulse">
         <div className="space-y-2">
           {INDICES.map((idx) => (

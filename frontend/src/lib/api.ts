@@ -7,6 +7,7 @@ import type {
   JobResponse,
   McpStatus,
   MlCorrelation,
+  MlSignalResponse,
   MlStatusResponse,
   SummaryResponse,
   SystemStatus,
@@ -103,4 +104,7 @@ export const api = {
 
   getEntityGraph: (ticker?: string): Promise<EntityGraphData> =>
     fetch(`${BASE}/api/ml/entity-graph${ticker ? `?ticker=${ticker}` : ""}`).then((r) => r.json()),
+
+  getMlPrediction: (ticker: string): Promise<MlSignalResponse> =>
+    fetch(`${BASE}/api/ml/predict/${ticker}`).then((r) => r.json()),
 };

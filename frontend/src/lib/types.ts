@@ -236,3 +236,15 @@ export interface EntityGraphData {
   entity_types: Record<string, number>;
   most_connected: { entity: string; degree: number }[];
 }
+
+// Response of GET /api/ml/predict/{ticker} (per-ticker SignalModel inference).
+export interface MlSignalResponse {
+  available: boolean;
+  reason?: string;
+  ticker?: string;
+  prediction?: "UP" | "DOWN";
+  confidence?: number;
+  probability_up?: number;
+  probability_down?: number;
+  signal_strength?: string;
+}

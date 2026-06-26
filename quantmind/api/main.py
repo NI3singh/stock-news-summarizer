@@ -516,6 +516,30 @@ async def entity_graph(ticker: str | None = None):
     }
 
 
+@app.get("/api/ml/predict/{ticker}")
+async def ml_predict(ticker: str):
+    from quantmind.ml.model import SignalModel
+    from quantmind.schemas import MemoryContext, NewsAnalysis, TickerAnalysis
+
+    ticker = ticker.upper()
+    analyses = await get_runner().db.get_recent_analyses(ticker, days=30)
+    if not analyses:
+        return {"available": False, "reason": "No recent analysis"}
+    model = SignalModel(ticker)
+    if not model.load():
+        return {"available": False, "reason": "No trained model"}
+    latest = analyses[0]
+    ta = TickerAnalysis(
+        ticker=ticker,
+        news=NewsAnalysis(sentiment_score=latest.get("sentiment_score") or 0.0),
+        memory=MemoryContext(),
+    )
+    result = model.predict(ta)
+    if "error" in result:
+        return {"available": False, "reason": result["error"]}
+    return {"available": True, **result}
+
+
 # --- Background job helpers ---
 
 async def _run_job(job_id: str, symbol: str):

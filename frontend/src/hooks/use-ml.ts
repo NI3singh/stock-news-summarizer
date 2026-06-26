@@ -19,3 +19,11 @@ export function useMlCorrelation(ticker: string | null, days: number) {
 export function useTrainModel() {
   return useMutation({ mutationFn: (ticker: string) => api.triggerMlTraining(ticker) });
 }
+
+export function useMlPrediction(ticker: string | null) {
+  return useQuery({
+    queryKey: ["ml-predict", ticker],
+    queryFn: () => api.getMlPrediction(ticker!),
+    enabled: !!ticker,
+  });
+}
