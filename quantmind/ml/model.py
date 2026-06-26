@@ -132,6 +132,17 @@ class SignalModel:
         }
 
         joblib.dump(self.pipeline, self.model_path)
+        # Sidecar: persist metrics as JSON so trained_at / CV accuracy survive a
+        # process restart (the joblib holds only the fitted pipeline; load() and
+        # predict() are unchanged and remain backward-compatible).
+        try:
+            import json
+
+            (MODEL_SAVE_DIR / f"{self.ticker}_metrics.json").write_text(
+                json.dumps(self.metrics)
+            )
+        except Exception:  # noqa: BLE001 — never let metric persistence break training
+            pass
         logger.info("Model saved to {}", self.model_path)
         if cv_mean is not None:
             logger.info("CV Accuracy: {:.3f} +/- {:.3f}", cv_mean, cv_std)

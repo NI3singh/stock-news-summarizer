@@ -319,6 +319,167 @@ async def mcp_recent_calls():
     return {"calls": []}
 
 
+# --- ML signals (Phase D) ---
+
+def _signal_accuracy(df) -> dict:
+    """Directional accuracy of sentiment signals vs the actual next-day move."""
+
+    def bucket(mask, correct_mask) -> dict:
+        occ = int(mask.sum())
+        cor = int((mask & correct_mask).sum())
+        return {"occurrences": occ, "correct": cor, "accuracy": round(cor / occ, 4) if occ else None}
+
+    s = df["sentiment_score"].fillna(0)
+    ret = df["next_day_return"]
+    pos = s > 0.3
+    neg = s < -0.3
+    neu = ~pos & ~neg
+    return {
+        "positive": bucket(pos, ret > 0),
+        "negative": bucket(neg, ret < 0),
+        "neutral": bucket(neu, ret.abs() < 1.0),
+    }
+
+
+def _corr_label_interp(corr, n: int, accuracy: dict | None) -> tuple[str, str]:
+    if corr is None:
+        return (
+            "Insufficient data",
+            f"Not enough varied samples to compute a correlation ({n} points).",
+        )
+    a = abs(corr)
+    strength = (
+        "Negligible" if a < 0.2
+        else "Weak" if a < 0.4
+        else "Moderate" if a < 0.6
+        else "Strong" if a < 0.8
+        else "Very Strong"
+    )
+    sign = "Positive" if corr > 0 else "Negative"
+    pos = (accuracy or {}).get("positive") or {}
+    pct = f"{pos['accuracy'] * 100:.0f}%" if pos.get("accuracy") is not None else "n/a"
+    interp = (
+        f"Sentiment shows a {strength.lower()} {sign.lower()} correlation (r={corr:+.2f}) with "
+        f"next-day returns over {n} samples. Positive-sentiment days were followed by gains {pct} of the time."
+    )
+    return f"{strength} {sign}", interp
+
+
+async def _train_model_bg(ticker: str) -> None:
+    try:
+        from quantmind.ml.model import SignalModel
+
+        result = await SignalModel(ticker).train(get_runner().db)
+        logger.info("[ML] train {} -> {}", ticker, result.get("status"))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[ML] training failed for {}: {}", ticker, exc)
+
+
+@app.get("/api/ml/status")
+async def ml_status():
+    import json
+
+    from quantmind.ml.model import MODEL_SAVE_DIR
+
+    runner = get_runner()
+    tickers = await runner.db.get_active_tickers()
+    models = []
+    for t in tickers:
+        analyses = await runner.db.get_all_analyses(t)
+        meta: dict = {}
+        metrics_file = MODEL_SAVE_DIR / f"{t}_metrics.json"
+        if metrics_file.exists():
+            try:
+                meta = json.loads(metrics_file.read_text())
+            except Exception:  # noqa: BLE001
+                meta = {}
+        models.append(
+            {
+                "ticker": t,
+                "trained": (MODEL_SAVE_DIR / f"{t}_model.joblib").exists(),
+                "analyses_count": len(analyses),
+                "trained_at": meta.get("trained_at"),
+                "cv_accuracy": meta.get("cv_accuracy_mean"),
+                "samples_trained": meta.get("samples_trained"),
+                "beats_baseline": meta.get("beats_baseline"),
+            }
+        )
+    return {
+        "models": models,
+        "trained_count": sum(1 for m in models if m["trained"]),
+        "total": len(models),
+    }
+
+
+@app.get("/api/ml/correlation/{ticker}")
+async def ml_correlation(ticker: str, days: int = 30):
+    import pandas as pd
+
+    from quantmind.ml.data_collector import MLDataCollector
+
+    ticker = ticker.upper()
+    df = await MLDataCollector(get_runner().db).collect_training_data(ticker, min_samples=1)
+    if df.empty:
+        return {
+            "ticker": ticker,
+            "days": days,
+            "sample_count": 0,
+            "samples": [],
+            "correlation": None,
+            "correlation_label": "No data",
+            "interpretation": "No analyses with matching price data yet.",
+            "accuracy": None,
+        }
+
+    df["_d"] = pd.to_datetime(df["analysis_date"])
+    cutoff = df["_d"].max() - pd.Timedelta(days=days)
+    fdf = df[df["_d"] >= cutoff]
+    if fdf.empty:
+        fdf = df
+
+    samples = []
+    for _, row in fdf.iterrows():
+        sval = row["sentiment_score"]
+        samples.append(
+            {
+                "date": row["analysis_date"],
+                "sentiment_score": None if pd.isna(sval) else round(float(sval), 4),
+                "next_day_return_pct": round(float(row["next_day_return"]), 4),
+            }
+        )
+
+    corr = None
+    if (
+        len(fdf) >= 2
+        and fdf["sentiment_score"].nunique() > 1
+        and fdf["next_day_return"].nunique() > 1
+    ):
+        c = float(fdf["sentiment_score"].corr(fdf["next_day_return"]))
+        corr = None if pd.isna(c) else c
+
+    accuracy = _signal_accuracy(fdf)
+    label, interp = _corr_label_interp(corr, len(fdf), accuracy)
+    return {
+        "ticker": ticker,
+        "days": days,
+        "sample_count": int(len(fdf)),
+        "samples": samples,
+        "correlation": round(corr, 4) if corr is not None else None,
+        "correlation_label": label,
+        "interpretation": interp,
+        "accuracy": accuracy,
+    }
+
+
+@app.post("/api/ml/train")
+async def trigger_ml_training(payload: dict | None = None):
+    ticker = (payload or {}).get("ticker") if isinstance(payload, dict) else None
+    if not ticker:
+        raise HTTPException(400, "ticker is required")
+    asyncio.create_task(_train_model_bg(ticker.upper()))
+    return {"success": True, "message": f"Training started for {ticker.upper()} (check back in ~30s)"}
+
+
 # --- Background job helpers ---
 
 async def _run_job(job_id: str, symbol: str):

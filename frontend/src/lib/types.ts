@@ -172,3 +172,43 @@ export interface McpStatus {
   url: string;
   tools: McpTool[];
 }
+
+// --- ML signals (Phase D) ---
+export interface MlModelStatus {
+  ticker: string;
+  trained: boolean;
+  analyses_count: number;
+  trained_at: string | null;
+  cv_accuracy: number | null;
+  samples_trained: number | null;
+  beats_baseline: boolean | null;
+}
+
+export interface MlStatusResponse {
+  models: MlModelStatus[];
+  trained_count: number;
+  total: number;
+}
+
+export interface CorrelationSample {
+  date: string;
+  sentiment_score: number | null;
+  next_day_return_pct: number;
+}
+
+export interface SignalBucket {
+  occurrences: number;
+  correct: number;
+  accuracy: number | null;
+}
+
+export interface MlCorrelation {
+  ticker: string;
+  days: number;
+  sample_count: number;
+  samples: CorrelationSample[];
+  correlation: number | null;
+  correlation_label: string;
+  interpretation: string;
+  accuracy: { positive: SignalBucket; negative: SignalBucket; neutral: SignalBucket } | null;
+}
