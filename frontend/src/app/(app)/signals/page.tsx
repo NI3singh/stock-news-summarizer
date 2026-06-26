@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Brain, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTickers } from "@/hooks/use-tickers";
@@ -83,9 +84,14 @@ export default function SignalsPage() {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-4 flex items-center gap-2">
-        <Brain className="h-5 w-5 text-qm-green" />
-        <h1 className="text-2xl font-bold text-qm-text">ML Signals</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Brain className="h-5 w-5 text-qm-green" />
+          <h1 className="text-2xl font-bold text-qm-text">ML Signals</h1>
+        </div>
+        <Link href="/signals/entity-graph" className="text-sm text-qm-green hover:underline">
+          View Entity Graph →
+        </Link>
       </div>
 
       {/* Section 1 — model status */}

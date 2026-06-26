@@ -480,6 +480,42 @@ async def trigger_ml_training(payload: dict | None = None):
     return {"success": True, "message": f"Training started for {ticker.upper()} (check back in ~30s)"}
 
 
+@app.get("/api/ml/entity-graph")
+async def entity_graph(ticker: str | None = None):
+    data = await get_runner().db.get_entity_graph(ticker.upper() if ticker else None)
+    nodes = [
+        {"name": n["id"], "type": n["type"], "mention_count": n["weight"]}
+        for n in data["nodes"]
+    ]
+    edges = [
+        {
+            "source": e["source"],
+            "target": e["target"],
+            "type": e["relationship"],
+            "confidence": e["confidence"],
+            "count": e["weight"],
+        }
+        for e in data["edges"]
+    ]
+    type_counts: dict = {}
+    for node in nodes:
+        type_counts[node["type"]] = type_counts.get(node["type"], 0) + 1
+    degree: dict = {}
+    for e in edges:
+        degree[e["source"]] = degree.get(e["source"], 0) + 1
+        degree[e["target"]] = degree.get(e["target"], 0) + 1
+    most_connected = sorted(degree.items(), key=lambda kv: kv[1], reverse=True)[:3]
+    return {
+        "ticker": ticker.upper() if ticker else None,
+        "nodes": nodes,
+        "edges": edges,
+        "node_count": len(nodes),
+        "edge_count": len(edges),
+        "entity_types": type_counts,
+        "most_connected": [{"entity": e, "degree": d} for e, d in most_connected],
+    }
+
+
 # --- Background job helpers ---
 
 async def _run_job(job_id: str, symbol: str):

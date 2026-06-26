@@ -212,3 +212,27 @@ export interface MlCorrelation {
   interpretation: string;
   accuracy: { positive: SignalBucket; negative: SignalBucket; neutral: SignalBucket } | null;
 }
+
+export interface GraphNode {
+  name: string;
+  type: string;
+  mention_count: number;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: string;
+  confidence: number;
+  count: number;
+}
+
+export interface EntityGraphData {
+  ticker: string | null;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  node_count: number;
+  edge_count: number;
+  entity_types: Record<string, number>;
+  most_connected: { entity: string; degree: number }[];
+}

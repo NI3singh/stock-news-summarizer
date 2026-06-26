@@ -3,6 +3,7 @@ import type {
   AlertEvent,
   AlertRule,
   AlertStatus,
+  EntityGraphData,
   JobResponse,
   McpStatus,
   MlCorrelation,
@@ -99,4 +100,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticker }),
     }).then((r) => r.json()),
+
+  getEntityGraph: (ticker?: string): Promise<EntityGraphData> =>
+    fetch(`${BASE}/api/ml/entity-graph${ticker ? `?ticker=${ticker}` : ""}`).then((r) => r.json()),
 };
