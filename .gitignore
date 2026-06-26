@@ -34,7 +34,11 @@ Thumbs.db
 # Logs
 *.log
 
-# QuantMind v2
-quantmind_chroma/
-quantmind.db
+# StockStalker v2
+stockstalker_chroma/
+stockstalker.db
 logs/
+stockstalker_models/
+
+frontend-plan/*
+frontend-plan/

@@ -1,6 +1,6 @@
-# QuantMind v2 — Multi-Agent Quantitative News Intelligence
+# StockStalker v2 — Multi-Agent Quantitative News Intelligence
 
-QuantMind v2 turns a watchlist of tickers into structured, explainable trading intelligence. For each ticker it concurrently scrapes four news sources, retrieves what it learned on prior runs, and runs a team of specialized async agents — news, quantitative (price/technical), and memory — whose outputs a coordinator fuses into a single typed `TickerAnalysis` with a human-readable synthesis. Where the original app was a synchronous Flask script that pulled three sources and asked Gemini for one daily summary, v2 is a fully async, end-to-end **typed** pipeline with a real agent architecture, persistent vector memory (so each run is informed by the last), a provider-agnostic LLM layer, and both an **interactive menu** and a scriptable CLI.
+StockStalker v2 turns a watchlist of tickers into structured, explainable trading intelligence. For each ticker it concurrently scrapes four news sources, retrieves what it learned on prior runs, and runs a team of specialized async agents — news, quantitative (price/technical), and memory — whose outputs a coordinator fuses into a single typed `TickerAnalysis` with a human-readable synthesis. Where the original app was a synchronous Flask script that pulled three sources and asked Gemini for one daily summary, v2 is a fully async, end-to-end **typed** pipeline with a real agent architecture, persistent vector memory (so each run is informed by the last), a provider-agnostic LLM layer, and both an **interactive menu** and a scriptable CLI.
 
 ## Architecture
 
@@ -58,7 +58,7 @@ QuantMind v2 turns a watchlist of tickers into structured, explainable trading i
 | Agent framework | **Custom (`BaseAgent`)** | ~100 lines of explicit, inspectable agent internals (timing, logging, error capture) vs. the opaque magic of CrewAI/AutoGen. |
 | LLM | **Gemini 2.5 Flash Lite** | Structured output (validated objects, no string parsing), strong quality, generous free tier; pluggable via a provider-agnostic factory (OpenAI/Anthropic/etc.). |
 | Concurrency | **asyncio.gather** | 4 sources scraped concurrently (~12s) instead of sequentially (~30s); multiple tickers analyzed under a semaphore. |
-| Interactive CLI | **rich + questionary** | Colored panels/tables/spinners plus an arrow-key menu, so the tool is pleasant to use interactively (`quantmind`) as well as scriptably. |
+| Interactive CLI | **rich + questionary** | Colored panels/tables/spinners plus an arrow-key menu, so the tool is pleasant to use interactively (`stockstalker`) as well as scriptably. |
 
 ## Design Decisions
 
@@ -75,38 +75,37 @@ QuantMind v2 turns a watchlist of tickers into structured, explainable trading i
 ## Quick Start
 
 ```bash
-# 1. Clone and check out the branch
+# 1. Clone
 git clone <repo-url> && cd stock-news-summarizer
-git checkout v2-multiagent
 
-# 2. Install (editable, with dev/test extras) into a Python 3.13 venv
+# 2. Install (editable, with dev/test extras) into a Python 3.11+ venv
 pip install -e ".[dev]"
 
 # 3. Configure secrets
 cp .env.example .env            # then fill in GEMINI_API_KEY and POLYGON_API_KEY
 
 # 4. Launch the interactive menu...
-quantmind
+stockstalker
 
 #    ...or run a one-off command directly
-quantmind analyze AAPL
+stockstalker analyze AAPL
 ```
 
 ## CLI Reference
 
-After `pip install -e .`, the `quantmind` command is available. Run it **with no arguments to launch the interactive menu**, or pass a subcommand to run it directly (ideal for scripts and cron):
+After `pip install -e .`, the `stockstalker` command is available. Run it **with no arguments to launch the interactive menu**, or pass a subcommand to run it directly (ideal for scripts and cron):
 
 ```bash
-quantmind                       # interactive arrow-key menu
-quantmind <command> [args]      # one-off command (= python quantmind/main.py <command> [args])
+stockstalker                       # interactive arrow-key menu
+stockstalker <command> [args]      # one-off command (= python stockstalker/main.py <command> [args])
 ```
 
 ### Interactive menu
 
-Running `quantmind` with no arguments opens an arrow-key menu (built with **rich** + **questionary**). Pick an action, answer the prompt, and results render in colored panels — then it loops back to the menu.
+Running `stockstalker` with no arguments opens an arrow-key menu (built with **rich** + **questionary**). Pick an action, answer the prompt, and results render in colored panels — then it loops back to the menu.
 
 ```
- QuantMind v2 · Multi-agent quantitative news intelligence
+ StockStalker v2 · Multi-agent quantitative news intelligence
 
  ? What would you like to do?  (use the up/down arrows, then Enter)
  > Analyze ticker(s)
@@ -123,7 +122,7 @@ Running `quantmind` with no arguments opens an arrow-key menu (built with **rich
 
 **`analyze TICKERS...`** — run the full pipeline for one or more tickers.
 ```
-$ quantmind analyze AAPL
+$ stockstalker analyze AAPL
 ────────────────────────────────────────────────────────────
 TICKER: AAPL  |  2026-06-23 06:01
 Sentiment: +0.30  |  Days of History: 1
@@ -144,30 +143,51 @@ SIGNALS: RSI=49.25  MACD=1.20  Vol Ratio=0.85
 
 **`add-ticker SYMBOL`** — add a ticker to the watchlist.
 ```
-$ quantmind add-ticker NVDA
+$ stockstalker add-ticker NVDA
 Added NVDA to watchlist
 ```
 
 **`remove-ticker SYMBOL`** — remove (soft-delete) a ticker from the watchlist.
 ```
-$ quantmind remove-ticker NVDA
+$ stockstalker remove-ticker NVDA
 Removed NVDA from watchlist
 ```
 
 **`list-tickers`** — show active tickers and when each was last analyzed.
 ```
-$ quantmind list-tickers
+$ stockstalker list-tickers
 Active tickers:
   AAPL  (last analyzed: 2026-06-23 06:08)
 ```
 
 **`run-scheduler`** — analyze the whole watchlist now, then start the daily cron refresh.
 ```
-$ quantmind run-scheduler
+$ stockstalker run-scheduler
 Running initial analysis for 3 tickers before starting scheduler...
 Scheduler running. Daily refresh at 08:00 Asia/Kolkata
 Press Ctrl+C to stop.
 ```
+
+**`api`** — start the FastAPI server (port 8000) that powers the web frontend.
+```
+$ stockstalker api
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+**`mcp-server`** — start the MCP server so MCP clients (e.g. Claude Desktop) can call StockStalker as tools.
+```
+$ stockstalker mcp-server
+Starting StockStalker MCP server...
+Connect Claude Desktop at: http://127.0.0.1:8765/mcp
+```
+
+## Web UI & Integrations
+
+Beyond the CLI, StockStalker ships with:
+
+- **Web frontend** (`frontend/`) — a Next.js + Tailwind dashboard (watchlist, per-ticker analysis, history, alerts, MCP status). Start the backend with `stockstalker api`, then `cd frontend && npm install && npm run dev` (→ http://localhost:3000).
+- **Telegram alerts** — rule-based notifications (sentiment thresholds, daily summaries) delivered to Telegram; configured from the dashboard or via `TELEGRAM_BOT_TOKEN` in `.env`.
+- **MCP server** (`stockstalker mcp-server`) — exposes the engine to MCP clients (Claude Desktop, IDEs) as five tools: `get_stock_analysis`, `run_stock_analysis`, `get_watchlist`, `compare_tickers`, `get_system_status`.
 
 ## Performance
 
@@ -181,7 +201,7 @@ Measured on live runs (free-tier Gemini, single developer machine):
 
 Cross-run memory is verified end-to-end: a second analysis of the same ticker reports `Days of History: 1` and retrieves the prior run's indexed articles, confirming the RAG loop.
 
-## vs. QuantMind v1
+## vs. StockStalker v1
 
 - **Async vs. synchronous** — `asyncio` throughout (httpx, aiosqlite, concurrent scrape + multi-ticker batch) instead of blocking, one-thing-at-a-time `requests`.
 - **4 sources vs. 3** — adds SEC EDGAR alongside Polygon, Finviz, and TradingView, each isolated and individually timed.

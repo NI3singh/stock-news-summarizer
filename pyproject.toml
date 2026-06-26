@@ -1,4 +1,4 @@
-# QuantMind v2 — packaging / dependency manifest
+# StockStalker v2 — packaging / dependency manifest
 # NOTE (Step 1.2): build-backend corrected to the valid PEP 517 backend
 # "setuptools.build_meta". The originally specified
 # "setuptools.backends.legacy:build" is not a real backend and breaks `pip install`.
@@ -8,7 +8,7 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "quantmind"
+name = "stockstalker"
 version = "2.0.0"
 description = "Multi-agent quantitative news intelligence system"
 requires-python = ">=3.11"
@@ -20,8 +20,9 @@ dependencies = [
     "pydantic>=2.7.0",
     "pydantic-settings>=2.3.0",
     "loguru>=0.7.0",
-    "chromadb>=0.5.0",
     "aiosqlite>=0.20.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.29.0",
     "google-generativeai>=0.8.0",
     "yfinance>=0.2.40",
     "pandas>=2.2.0",
@@ -38,6 +39,14 @@ dependencies = [
     # Interactive TUI menu — rich panels/tables/spinners + questionary arrow-key menus
     "rich>=13.0.0",
     "questionary>=2.0.0",
+    # Telegram bot integration (Phase B) — optional at runtime
+    "python-telegram-bot>=21.0",
+    # MCP server (Phase C) — exposes StockStalker as tools to MCP clients
+    "fastmcp>=0.4.0",
+    # REST API layer (Phase A) — FastAPI app exposing the engine over HTTP for the frontend
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -47,18 +56,18 @@ dev = [
     "pytest-mock>=3.14.0",
 ]
 
-# Console-script entry point: after `pip install`, users get a `quantmind`
-# command. With no subcommand it launches the interactive menu (quantmind.main:main).
+# Console-script entry point: after `pip install`, users get a `stockstalker`
+# command. With no subcommand it launches the interactive menu (stockstalker.main:main).
 [project.scripts]
-quantmind = "quantmind.main:main"
+stockstalker = "stockstalker.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["quantmind*"]
+include = ["stockstalker*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["quantmind/tests"]
+testpaths = ["stockstalker/tests"]
 markers = [
     "live: live tests that call real external APIs (deselected by default; run with -m live)",
 ]
