@@ -5,7 +5,6 @@ import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSummary } from "@/hooks/use-tickers";
 import { useAgentRuns } from "@/hooks/use-system";
-import { useMlPrediction } from "@/hooks/use-ml";
 import { useRefreshTicker } from "@/hooks/use-refresh";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { SentimentTimeline } from "@/components/charts/sentiment-timeline";
@@ -14,7 +13,6 @@ import { AgentTimeline } from "@/components/dashboard/agent-timeline";
 import { WhatChangedBox } from "@/components/dashboard/what-changed-box";
 import { SourceArticles } from "@/components/dashboard/source-articles";
 import { HistoryAccordion } from "@/components/dashboard/history-accordion";
-import { MlSignalCard } from "@/components/dashboard/ml-signal-card";
 
 function StatCard({
   label,
@@ -43,7 +41,6 @@ export default function TickerDetailPage() {
   const ticker = String(params.ticker ?? "").toUpperCase();
   const { data, isLoading } = useSummary(ticker, 30);
   const { data: allRuns } = useAgentRuns(50);
-  const { data: mlSignal } = useMlPrediction(ticker);
   const refresh = useRefreshTicker();
   const processing = useDashboardStore((s) => s.processingTickers.has(ticker));
 
@@ -157,22 +154,6 @@ export default function TickerDetailPage() {
               <p className="text-sm leading-7 text-qm-text2">{latest.final_synthesis}</p>
             </section>
           )}
-
-          {/* ML signal */}
-          <section>
-            <h2 className="mb-2 text-sm font-semibold text-qm-text">🧠 ML Signal</h2>
-            {mlSignal?.available ? (
-              <MlSignalCard signal={mlSignal} />
-            ) : (
-              <p className="text-sm text-qm-text3">
-                {mlSignal?.reason ?? "No trained model"} — train one on the{" "}
-                <Link href="/signals" className="text-qm-green hover:underline">
-                  ML Signals
-                </Link>{" "}
-                page.
-              </p>
-            )}
-          </section>
 
           {/* ROW 4 — articles + agent timeline */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

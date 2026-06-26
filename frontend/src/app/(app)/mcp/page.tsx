@@ -7,14 +7,14 @@ import { api } from "@/lib/api";
 
 const SETUP_STEPS = [
   "Open Claude Desktop → Settings → Developer → MCP Servers",
-  "Click 'Add Server' → enter name 'QuantMind' and the URL above",
-  "Restart Claude Desktop — QuantMind tools appear in your conversations",
+  "Click 'Add Server' → enter name 'StockStalker' and the URL above",
+  "Restart Claude Desktop — StockStalker tools appear in your conversations",
 ];
 
 const EXAMPLE_QUERIES = [
   "What's the current sentiment on AAPL?",
   "Compare AAPL, MSFT, and NVDA sentiment",
-  "What's the QuantMind system status?",
+  "What's the StockStalker system status?",
   "Show me the entity graph for NVDA",
 ];
 
@@ -22,9 +22,9 @@ const EXAMPLE_QUERIES = [
 const TOOL_EXAMPLES: Record<string, string> = {
   get_stock_analysis: "What's the latest analysis for AAPL?",
   run_stock_analysis: "Run a fresh analysis on TSLA",
-  get_watchlist: "What's in my QuantMind watchlist?",
+  get_watchlist: "What's in my StockStalker watchlist?",
   compare_tickers: "Compare AAPL, MSFT and NVDA",
-  get_system_status: "What's the QuantMind system status?",
+  get_system_status: "What's the StockStalker system status?",
   get_ml_signal: "What's the ML signal for AAPL?",
   get_entity_graph: "Show me the entity graph for NVDA",
 };
@@ -112,8 +112,8 @@ export default function McpPage() {
       {!running && (
         <div className="mb-6 rounded-lg border border-qm-amber/30 bg-qm-amber-bg p-3 text-xs text-qm-text2">
           The MCP server runs as a separate process. Start it with{" "}
-          <span className="font-mono text-qm-text">quantmind mcp-server</span> (or{" "}
-          <span className="font-mono text-qm-text">quantmind run-scheduler --with-mcp</span>).
+          <span className="font-mono text-qm-text">stockstalker mcp-server</span> (or{" "}
+          <span className="font-mono text-qm-text">stockstalker run-scheduler --with-mcp</span>).
         </div>
       )}
 

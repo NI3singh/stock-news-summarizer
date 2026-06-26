@@ -32,7 +32,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 flex-shrink-0 items-center gap-4 border-b border-qm-border bg-qm-card px-4">
+    <header className="glass sticky top-0 z-20 flex h-14 flex-shrink-0 items-center gap-4 border-b border-qm-border/70 px-4 shadow-[0_1px_20px_rgba(0,0,0,0.25)]">
       <Logo size="sm" />
 
       <div className="relative mx-auto w-full max-w-md">
@@ -60,7 +60,7 @@ export function Header() {
         >
           <Bell className="h-5 w-5" />
         </button>
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-qm-green text-sm font-bold text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-qm-green to-qm-green-dim text-sm font-bold text-white shadow-[0_0_12px_rgba(34,197,94,0.45)]">
           {initial}
         </div>
         <button

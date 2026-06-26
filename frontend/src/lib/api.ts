@@ -3,12 +3,8 @@ import type {
   AlertEvent,
   AlertRule,
   AlertStatus,
-  EntityGraphData,
   JobResponse,
   McpStatus,
-  MlCorrelation,
-  MlSignalResponse,
-  MlStatusResponse,
   SummaryResponse,
   SystemStatus,
   TickersResponse,
@@ -85,26 +81,4 @@ export const api = {
   // --- MCP (Phase C) ---
   getMcpStatus: (): Promise<McpStatus> =>
     fetch(`${BASE}/api/mcp/status`).then((r) => r.json()),
-
-  // --- ML signals (Phase D) ---
-  getMlStatus: (): Promise<MlStatusResponse> =>
-    fetch(`${BASE}/api/ml/status`).then((r) => r.json()),
-
-  getMlCorrelation: (ticker: string, days: number): Promise<MlCorrelation> =>
-    fetch(`${BASE}/api/ml/correlation/${ticker}?days=${days}`).then((r) => r.json()),
-
-  triggerMlTraining: (
-    ticker: string,
-  ): Promise<{ success: boolean; message?: string; detail?: string }> =>
-    fetch(`${BASE}/api/ml/train`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticker }),
-    }).then((r) => r.json()),
-
-  getEntityGraph: (ticker?: string): Promise<EntityGraphData> =>
-    fetch(`${BASE}/api/ml/entity-graph${ticker ? `?ticker=${ticker}` : ""}`).then((r) => r.json()),
-
-  getMlPrediction: (ticker: string): Promise<MlSignalResponse> =>
-    fetch(`${BASE}/api/ml/predict/${ticker}`).then((r) => r.json()),
 };

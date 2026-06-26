@@ -1,14 +1,11 @@
-// TypeScript types for the StockStalker AI / QuantMind backend (FastAPI over the engine).
+// TypeScript types for the StockStalker AI / StockStalker backend (FastAPI over the engine).
 //
 // Two groups:
 //   1) LIVE API SHAPES — exactly what the REST endpoints return today. Use these in the UI.
 //   2) ENGINE REFERENCE — the pydantic schema the agent pipeline produces internally.
 //
-// IMPORTANT caveats (verified against quantmind/api/main.py + memory/database.py):
+// IMPORTANT caveats (verified against stockstalker/api/main.py + memory/database.py):
 //   • GET /api/summary returns flat DB rows (`SummaryRow`), NOT a `TickerAnalysis`.
-//   • The ML prediction is NOT persisted to the `analyses` table, so it does NOT
-//     appear in /api/summary. `MLPrediction` below matches the real engine output
-//     (UP/DOWN + signal_strength) and is exposed only via the MCP tool for now.
 
 // ─────────────────────────── ENGINE REFERENCE SCHEMA ───────────────────────────
 export interface Article {
@@ -50,16 +47,6 @@ export interface QuantAnalysis {
   correlation_note: string;
 }
 
-// Real engine ML output (per the MLPrediction schema). Not currently persisted /
-// returned by /api/summary — surfaced only by the MCP `get_ml_signal` tool today.
-export interface MLPrediction {
-  prediction: "UP" | "DOWN";
-  confidence: number;
-  probability_up: number;
-  probability_down: number;
-  signal_strength: string;
-}
-
 export interface TickerAnalysis {
   ticker: string;
   analyzed_at: string;
@@ -67,7 +54,6 @@ export interface TickerAnalysis {
   quant: QuantAnalysis | null;
   memory: MemoryContext;
   final_synthesis: string;
-  ml_prediction: MLPrediction | null;
 }
 
 // ──────────────────────────── LIVE API SHAPES ────────────────────────────
@@ -171,80 +157,4 @@ export interface McpStatus {
   port: number;
   url: string;
   tools: McpTool[];
-}
-
-// --- ML signals (Phase D) ---
-export interface MlModelStatus {
-  ticker: string;
-  trained: boolean;
-  analyses_count: number;
-  trained_at: string | null;
-  cv_accuracy: number | null;
-  samples_trained: number | null;
-  beats_baseline: boolean | null;
-}
-
-export interface MlStatusResponse {
-  models: MlModelStatus[];
-  trained_count: number;
-  total: number;
-}
-
-export interface CorrelationSample {
-  date: string;
-  sentiment_score: number | null;
-  next_day_return_pct: number;
-}
-
-export interface SignalBucket {
-  occurrences: number;
-  correct: number;
-  accuracy: number | null;
-}
-
-export interface MlCorrelation {
-  ticker: string;
-  days: number;
-  sample_count: number;
-  samples: CorrelationSample[];
-  correlation: number | null;
-  correlation_label: string;
-  interpretation: string;
-  accuracy: { positive: SignalBucket; negative: SignalBucket; neutral: SignalBucket } | null;
-}
-
-export interface GraphNode {
-  name: string;
-  type: string;
-  mention_count: number;
-}
-
-export interface GraphEdge {
-  source: string;
-  target: string;
-  type: string;
-  confidence: number;
-  count: number;
-}
-
-export interface EntityGraphData {
-  ticker: string | null;
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  node_count: number;
-  edge_count: number;
-  entity_types: Record<string, number>;
-  most_connected: { entity: string; degree: number }[];
-}
-
-// Response of GET /api/ml/predict/{ticker} (per-ticker SignalModel inference).
-export interface MlSignalResponse {
-  available: boolean;
-  reason?: string;
-  ticker?: string;
-  prediction?: "UP" | "DOWN";
-  confidence?: number;
-  probability_up?: number;
-  probability_down?: number;
-  signal_strength?: string;
 }

@@ -20,8 +20,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-qm-bg">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-qm-border border-t-qm-green" />
+      <div className="app-canvas flex min-h-screen items-center justify-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-2 border-qm-border border-t-qm-green shadow-[0_0_20px_rgba(34,197,94,0.3)]" />
       </div>
     );
   }
@@ -32,7 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">{children}</main>
+        <main className="app-canvas flex-1 overflow-y-auto pb-16 md:pb-0">{children}</main>
       </div>
       <NotificationToast />
       <BottomNav />

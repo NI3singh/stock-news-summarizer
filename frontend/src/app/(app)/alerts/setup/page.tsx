@@ -61,7 +61,7 @@ export default function TelegramSetupPage() {
   const [connected, setConnected] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
 
-  const botUsername = status?.bot_username || "QuantMindBot";
+  const botUsername = status?.bot_username || "StockStalkerBot";
   const command = `/start ${token}`;
 
   // Generate the display token client-side to avoid an SSR hydration mismatch.
@@ -135,8 +135,8 @@ export default function TelegramSetupPage() {
         {/* Step 1 */}
         {step === 1 && !connected && (
           <div className="space-y-4 text-center">
-            <h2 className="text-lg font-semibold text-qm-text">Step 1 — Open your QuantMind bot</h2>
-            <p className="text-sm text-qm-text3">First, open the QuantMind bot in Telegram.</p>
+            <h2 className="text-lg font-semibold text-qm-text">Step 1 — Open your StockStalker bot</h2>
+            <p className="text-sm text-qm-text3">First, open the StockStalker bot in Telegram.</p>
             <a
               href={`https://t.me/${botUsername}`}
               target="_blank"
@@ -227,7 +227,7 @@ export default function TelegramSetupPage() {
       </div>
 
       <p className="mt-4 text-center text-xs text-qm-text3">
-        Note: the bot must be running (<span className="font-mono">quantmind run-scheduler</span>) to
+        Note: the bot must be running (<span className="font-mono">stockstalker run-scheduler</span>) to
         receive your message.
       </p>
     </div>

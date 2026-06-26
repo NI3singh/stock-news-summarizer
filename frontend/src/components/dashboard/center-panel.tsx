@@ -52,7 +52,7 @@ export function CenterPanel({
         <div>
           <Link
             href={`/dashboard/${ticker}`}
-            className="text-3xl font-bold text-qm-text transition-colors hover:text-qm-green"
+            className="text-3xl font-extrabold tracking-tight text-qm-text transition-colors hover:text-qm-green"
           >
             {ticker}
           </Link>
@@ -72,9 +72,9 @@ export function CenterPanel({
           <div className="mt-4">{refreshButton}</div>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Sentiment gauge */}
-          <div className="flex justify-center rounded-xl border border-qm-border bg-qm-card py-6">
+          <div className="qm-elevate bg-green-glow relative flex justify-center overflow-hidden rounded-xl border border-qm-border bg-qm-card py-8">
             <SentimentGauge score={latest.sentiment_score ?? 0} size="lg" />
           </div>
 
@@ -88,7 +88,7 @@ export function CenterPanel({
 
           {/* News summary */}
           {latest.news_summary && (
-            <section>
+            <section className="qm-elevate rounded-xl border border-qm-border bg-qm-card p-5">
               <h2 className="mb-2 text-sm font-semibold text-qm-text">🗞️ News Summary</h2>
               <p className="text-sm leading-7 text-qm-text2">{latest.news_summary}</p>
             </section>
@@ -96,7 +96,7 @@ export function CenterPanel({
 
           {/* Daily synthesis */}
           {latest.final_synthesis && (
-            <section>
+            <section className="qm-elevate rounded-xl border border-qm-border bg-qm-card p-5">
               <h2 className="mb-2 text-sm font-semibold text-qm-text">📝 Daily Synthesis</h2>
               <p className="text-sm leading-7 text-qm-text2">{latest.final_synthesis}</p>
             </section>
@@ -104,8 +104,8 @@ export function CenterPanel({
 
           {/* Technical signals — cards (when persisted) + interpretation text */}
           {(latest.technical_signals || latest.quant_interpretation) && (
-            <section>
-              <h2 className="mb-2 text-sm font-semibold text-qm-text">📈 Technical Signals</h2>
+            <section className="qm-elevate rounded-xl border border-qm-border bg-qm-card p-5">
+              <h2 className="mb-3 text-sm font-semibold text-qm-text">📈 Technical Signals</h2>
               {latest.technical_signals && (
                 <div className="mb-3">
                   <QuantSignals signals={latest.technical_signals} />
@@ -118,16 +118,16 @@ export function CenterPanel({
           )}
 
           {/* Source articles */}
-          <section>
-            <h2 className="mb-2 text-sm font-semibold text-qm-text">
+          <section className="rounded-xl border border-qm-border bg-qm-card p-5">
+            <h2 className="mb-3 text-sm font-semibold text-qm-text">
               📰 Source Articles ({data?.articles?.length ?? 0})
             </h2>
             <SourceArticles articles={data?.articles ?? []} />
           </section>
 
           {/* 7-day history */}
-          <section>
-            <h2 className="mb-2 text-sm font-semibold text-qm-text">🕐 7-Day History</h2>
+          <section className="rounded-xl border border-qm-border bg-qm-card p-5">
+            <h2 className="mb-3 text-sm font-semibold text-qm-text">🕐 7-Day History</h2>
             <HistoryAccordion summaries={data?.historical_summaries ?? []} />
           </section>
         </div>

@@ -3,20 +3,16 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Activity,
   Bell,
-  Brain,
   ChevronLeft,
   ChevronRight,
   Clock,
-  Columns2,
   LayoutDashboard,
   Link2,
   Loader2,
   Plus,
   RefreshCw,
   Settings,
-  TrendingUp,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,10 +30,6 @@ const NAV_ITEMS = [
   { href: "/history", icon: Clock, label: "History" },
   { href: "/alerts", icon: Bell, label: "Alerts", badge: "B", badgeClass: "bg-blue-500" },
   { href: "/mcp", icon: Link2, label: "MCP Server", badge: "C", badgeClass: "bg-purple-500" },
-  { href: "/signals", icon: Brain, label: "ML Signals", badge: "D", badgeClass: "bg-amber-500" },
-  { href: "/backtest", icon: TrendingUp, label: "Backtest", badge: "E", badgeClass: "bg-red-500" },
-  { href: "/system", icon: Activity, label: "System", badge: "F", badgeClass: "bg-cyan-500" },
-  { href: "/compare", icon: Columns2, label: "Compare", badge: "G", badgeClass: "bg-pink-500" },
 ];
 
 function sentimentDot(score: number | null | undefined): string {
