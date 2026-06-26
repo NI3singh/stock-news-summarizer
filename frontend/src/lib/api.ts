@@ -4,6 +4,7 @@ import type {
   AlertRule,
   AlertStatus,
   JobResponse,
+  McpStatus,
   SummaryResponse,
   SystemStatus,
   TickersResponse,
@@ -76,4 +77,8 @@ export const api = {
 
   getAlertEvents: (): Promise<{ events: AlertEvent[] }> =>
     fetch(`${BASE}/api/alerts/events`).then((r) => r.json()),
+
+  // --- MCP (Phase C) ---
+  getMcpStatus: (): Promise<McpStatus> =>
+    fetch(`${BASE}/api/mcp/status`).then((r) => r.json()),
 };

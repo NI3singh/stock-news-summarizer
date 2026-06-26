@@ -158,3 +158,17 @@ export interface AlertEvent {
   message: string | null;
   delivered: number; // 0/1 in SQLite
 }
+
+// --- MCP (Phase C) ---
+export interface McpTool {
+  name: string;
+  description: string;
+}
+
+export interface McpStatus {
+  running: boolean;
+  host: string;
+  port: number;
+  url: string;
+  tools: McpTool[];
+}

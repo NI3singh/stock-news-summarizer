@@ -264,6 +264,61 @@ async def get_alert_events():
     return {"events": events}
 
 
+# --- MCP (Phase C) ---
+
+async def _probe_tcp(host: str, port: int, timeout: float = 0.5) -> bool:
+    """Best-effort TCP connect to detect whether something is listening on host:port."""
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:  # noqa: BLE001
+            pass
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def _list_mcp_tools() -> list[dict]:
+    """Real registered MCP tools (name + one-line brief) from the mcp instance."""
+    try:
+        from quantmind.integrations.mcp_server import mcp
+
+        tools = await mcp.list_tools()
+        result = []
+        for t in tools:
+            desc = (getattr(t, "description", "") or "").strip()
+            brief = next((ln.strip() for ln in desc.splitlines() if ln.strip()), "")
+            result.append({"name": t.name, "description": brief})
+        return result
+    except Exception as exc:  # noqa: BLE001 — never let tool listing break the endpoint
+        logger.warning("MCP tool listing failed: {}", exc)
+        return []
+
+
+@app.get("/api/mcp/status")
+async def mcp_status():
+    host = settings.mcp_server_host
+    port = settings.mcp_server_port
+    # The MCP server runs as a SEPARATE process — probe the port to detect it.
+    probe_host = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    return {
+        "running": await _probe_tcp(probe_host, port),
+        "host": host,
+        "port": port,
+        "url": f"http://{host}:{port}/mcp",
+        "tools": await _list_mcp_tools(),
+    }
+
+
+@app.get("/api/mcp/calls")
+async def mcp_recent_calls():
+    # The MCP server runs as a separate process, so the API cannot observe its
+    # tool calls. Always empty here until cross-process call logging is added.
+    return {"calls": []}
+
+
 # --- Background job helpers ---
 
 async def _run_job(job_id: str, symbol: str):
