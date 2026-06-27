@@ -1,6 +1,25 @@
-# StockStalker v2 — Multi-Agent Quantitative News Intelligence
+<div align="center">
 
-StockStalker v2 turns a watchlist of tickers into structured, explainable trading intelligence. For each ticker it concurrently scrapes four news sources, retrieves what it learned on prior runs, and runs a team of specialized async agents — news, quantitative (price/technical), and memory — whose outputs a coordinator fuses into a single typed `TickerAnalysis` with a human-readable synthesis. Where the original app was a synchronous Flask script that pulled three sources and asked Gemini for one daily summary, v2 is a fully async, end-to-end **typed** pipeline with a real agent architecture, persistent vector memory (so each run is informed by the last), a provider-agnostic LLM layer, and both an **interactive menu** and a scriptable CLI.
+<img src="frontend/public/logo.svg" alt="StockStalker-AI Logo" width="120"/>
+
+# StockStalker-AI
+
+### Multi-Agent Quantitative News Intelligence
+
+**AI-powered multi-agent stock intelligence platform for financial news analysis, quantitative market insights, and Retrieval-Augmented Generation (RAG).**
+
+</div>
+
+
+## Overview
+
+StockStalker-AI transforms a simple watchlist into structured, explainable trading intelligence.
+
+For every ticker, the platform concurrently collects financial news from multiple trusted sources, retrieves historical context using persistent vector memory, performs quantitative market analysis, and synthesizes everything through specialized AI agents into a comprehensive trading report.
+
+Unlike traditional stock news summarizers, StockStalker-AI combines **Multi-Agent AI**, **Retrieval-Augmented Generation (RAG)**, **Quantitative Analysis**, and **Persistent Memory** to deliver contextual investment intelligence rather than generic summaries.
+
+
 
 ## Architecture
 
