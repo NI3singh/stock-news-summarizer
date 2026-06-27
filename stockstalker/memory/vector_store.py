@@ -5,7 +5,7 @@ Stores article embeddings in the SAME database the rest of the app uses
   • PostgreSQL / Supabase → a ``vector`` column + pgvector's ``<=>`` cosine search.
   • SQLite (local dev)     → embeddings as JSON text + an in-Python cosine scan.
 
-Embeddings are produced by Gemini ``text-embedding-004`` (768-dim) — no local
+Embeddings are produced by Gemini ``gemini-embedding-001`` (768-dim) — no local
 embedding model is shipped, which keeps the deployable image small. Blocking calls
 (the embedding HTTP request) are offloaded to a worker thread via ``to_thread``.
 """
@@ -21,7 +21,7 @@ from stockstalker.memory.database import _get_engine, _normalize_url
 from stockstalker.schemas import Article
 from stockstalker.utils import logger
 
-EMBED_MODEL = "models/text-embedding-004"
+EMBED_MODEL = "gemini-embedding-001"
 EMBED_DIM = 768
 
 
