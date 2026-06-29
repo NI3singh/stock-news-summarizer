@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     #   https://stockstalker.onrender.com,https://stockstalker.vercel.app
     frontend_origin: str | None = None
     max_concurrent_tickers: int = 3
+    # News sentiment engine: "llm" (Gemini; default) or "vader" (rule-based, no
+    # network). With "llm", the NewsAgent automatically falls back to VADER when
+    # the model is unreachable, so analysis still yields a sentiment score.
+    sentiment_engine: str = "llm"
 
     # LLM client configuration (consumed by the stockstalker.llm factory; env-overridable).
     llm_provider: str = "google"

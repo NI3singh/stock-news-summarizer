@@ -7,6 +7,7 @@ asks the LLM to interpret them alongside the news sentiment.
 import asyncio
 
 from stockstalker.agents.base import BaseAgent
+from stockstalker.llm.client import LLMError
 from stockstalker.llm.prompts import quant_interpret_prompt
 from stockstalker.schemas import AgentContext, AgentResult, QuantAnalysis, TechnicalSignals
 from stockstalker.utils import logger
@@ -102,11 +103,23 @@ class QuantAgent(BaseAgent):
             if "negative" in trend:
                 news_sentiment = -0.5
 
-        # --- Step 4: LLM interpretation ---
-        quant_analysis = await self.llm.generate_structured(
-            quant_interpret_prompt(context.ticker, signals, news_sentiment),
-            QuantAnalysis,
-        )
+        # --- Step 4: LLM interpretation (degrade to signals-only if the LLM is down) ---
+        try:
+            quant_analysis = await self.llm.generate_structured(
+                quant_interpret_prompt(context.ticker, signals, news_sentiment),
+                QuantAnalysis,
+            )
+        except LLMError as exc:
+            logger.warning(
+                "[{}] LLM unavailable ({}) — returning technical signals without interpretation",
+                self.name,
+                exc,
+            )
+            quant_analysis = QuantAnalysis(
+                signals=signals,
+                interpretation="AI interpretation unavailable — technical signals only.",
+                correlation_note="",
+            )
         # Use the REAL computed signals, not the LLM's reproduced version.
         quant_analysis.signals = signals
 

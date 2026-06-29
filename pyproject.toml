@@ -35,6 +35,8 @@ dependencies = [
     "langchain-openai>=0.2.0",
     "langchain-google-genai>=2.0.0",
     "langchain-anthropic>=0.3.0",
+    # Rule-based sentiment fast-path / offline fallback (no network, no model download)
+    "vaderSentiment>=3.3.2",
     # Interactive TUI menu — rich panels/tables/spinners + questionary arrow-key menus
     "rich>=13.0.0",
     "questionary>=2.0.0",
