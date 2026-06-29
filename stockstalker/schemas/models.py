@@ -57,10 +57,28 @@ class NewsAnalysis(BaseModel):
     composite_sentiment: float | None = None
 
 
+class MarketData(BaseModel):
+    """yfinance fundamentals / market enrichment for a ticker (best-effort; all optional)."""
+
+    current_price: float | None = None
+    market_cap: float | None = None
+    pe_ratio: float | None = None  # trailing P/E
+    forward_pe: float | None = None
+    beta: float | None = None
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
+    short_ratio: float | None = None
+    dividend_yield: float | None = None
+    sector: str | None = None
+    industry: str | None = None
+    earnings_date: str | None = None  # ISO date string
+
+
 class QuantAnalysis(BaseModel):
     signals: TechnicalSignals
     interpretation: str = ""
     correlation_note: str = ""
+    market: MarketData | None = None
 
 
 class TickerAnalysis(BaseModel):

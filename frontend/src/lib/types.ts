@@ -29,6 +29,21 @@ export interface TechnicalSignals {
   price_change_pct: number | null;
 }
 
+export interface MarketData {
+  current_price: number | null;
+  market_cap: number | null;
+  pe_ratio: number | null;
+  forward_pe: number | null;
+  beta: number | null;
+  fifty_two_week_high: number | null;
+  fifty_two_week_low: number | null;
+  short_ratio: number | null;
+  dividend_yield: number | null;
+  sector: string | null;
+  industry: string | null;
+  earnings_date: string | null;
+}
+
 export interface MemoryContext {
   similar_past_events: string[];
   historical_sentiment_trend: string;
@@ -75,6 +90,7 @@ export interface SummaryRow {
   key_themes: string[] | null;
   technical_signals: TechnicalSignals | null;
   composite_sentiment: number | null; // credibility-weighted composite
+  market_data: MarketData | null;
 }
 
 export interface SummaryResponse {

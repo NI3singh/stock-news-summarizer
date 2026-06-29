@@ -13,6 +13,7 @@ import { AgentTimeline } from "@/components/dashboard/agent-timeline";
 import { WhatChangedBox } from "@/components/dashboard/what-changed-box";
 import { SourceArticles } from "@/components/dashboard/source-articles";
 import { HistoryAccordion } from "@/components/dashboard/history-accordion";
+import { MarketDataCard } from "@/components/dashboard/market-data-card";
 
 function StatCard({
   label,
@@ -145,6 +146,9 @@ export default function TickerDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Market data (yfinance fundamentals) */}
+          <MarketDataCard data={latest.market_data} />
 
           {/* ROW 3 — what changed + synthesis */}
           {latest.what_changed && <WhatChangedBox text={latest.what_changed} />}

@@ -8,6 +8,7 @@ import { WhatChangedBox } from "@/components/dashboard/what-changed-box";
 import { SourceArticles } from "@/components/dashboard/source-articles";
 import { HistoryAccordion } from "@/components/dashboard/history-accordion";
 import { KeyThemes } from "@/components/dashboard/key-themes";
+import { MarketDataCard } from "@/components/dashboard/market-data-card";
 import { QuantSignals } from "@/components/dashboard/quant-signals";
 import { useRefreshTicker } from "@/hooks/use-refresh";
 import { useDashboardStore } from "@/stores/dashboard-store";
@@ -91,6 +92,9 @@ export function CenterPanel({
               </div>
             )}
           </div>
+
+          {/* Market data (yfinance fundamentals) */}
+          <MarketDataCard data={latest.market_data} />
 
           {/* Key themes */}
           {latest.key_themes && latest.key_themes.length > 0 && (

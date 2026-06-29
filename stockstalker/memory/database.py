@@ -96,6 +96,7 @@ analyses_t = Table(
     Column("key_themes", Text),
     Column("technical_signals", Text),
     Column("composite_sentiment", Float),
+    Column("market_data", Text),
 )
 
 agent_runs_t = Table(
@@ -139,6 +140,7 @@ alert_events_t = Table(
 # Each runs in its own transaction; a "duplicate column" error is caught + ignored.
 _MIGRATIONS = [
     "ALTER TABLE analyses ADD COLUMN composite_sentiment FLOAT",
+    "ALTER TABLE analyses ADD COLUMN market_data TEXT",
 ]
 
 
@@ -272,6 +274,11 @@ class DatabaseManager:
             if analysis.quant
             else None
         )
+        market_data = (
+            json.dumps(analysis.quant.market.model_dump(mode="json"))
+            if analysis.quant and analysis.quant.market
+            else None
+        )
         async with self._engine.begin() as conn:
             await conn.execute(
                 insert(analyses_t).values(
@@ -287,6 +294,7 @@ class DatabaseManager:
                     key_themes=key_themes,
                     technical_signals=technical_signals,
                     composite_sentiment=analysis.news.composite_sentiment,
+                    market_data=market_data,
                 )
             )
         logger.debug("Analysis saved for {}", ticker)
@@ -329,7 +337,7 @@ class DatabaseManager:
         for row in rows:
             record = dict(row)
             # Best-effort: decode JSON columns back into Python structures.
-            for col in ("articles_used", "memory_context", "key_themes", "technical_signals"):
+            for col in ("articles_used", "memory_context", "key_themes", "technical_signals", "market_data"):
                 if record.get(col):
                     try:
                         record[col] = json.loads(record[col])
