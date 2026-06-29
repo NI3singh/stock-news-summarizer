@@ -8,7 +8,7 @@ per call), so a long-running scheduler or a batch run pays the heavy setup cost
 
 The five heavy resource imports are deferred into ``__init__`` so that merely
 importing this module (e.g. for the CLI's argparse wiring) stays cheap —
-langchain / crawl4ai only load when a runner is actually constructed.
+langchain and the scraper stack only load when a runner is actually constructed.
 """
 from __future__ import annotations
 

@@ -26,13 +26,13 @@ Unlike traditional stock news summarizers, StockStalker-AI combines **Multi-Agen
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  DATA SOURCES                                                          │
-│  Polygon API   ·   Finviz   ·   TradingView   ·   SEC EDGAR           │
+│  Polygon API  ·  Finviz  ·  Yahoo Finance RSS  ·  Google News RSS    │
 └───────────────────────────────┬──────────────────────────────────────┘
                                  │  (4 sources, concurrent)
                                  ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  ASYNC SCRAPER ORCHESTRATOR                                            │
-│  BaseScraper (httpx + rate limiter) · TradingView via crawl4ai        │
+│  BaseScraper (httpx + rate limiter) · REST APIs + RSS feeds          │
 │  asyncio.gather + per-source timeout + URL/title dedup                 │
 └───────────────────────────────┬──────────────────────────────────────┘
                                  │  list[Article]
@@ -68,7 +68,7 @@ Unlike traditional stock news summarizers, StockStalker-AI combines **Multi-Agen
 | Component | Technology | Why This Choice |
 |---|---|---|
 | HTTP client | **httpx** | Async-native; replaces blocking `requests` so all four sources fetch concurrently. |
-| Web scraping | **crawl4ai** | Drives a headless browser to render the JS-heavy pages TradingView requires (plain HTTP returns an empty shell). |
+| News sources | **httpx + RSS** | Polygon & Finviz plus Yahoo Finance / Google News RSS feeds — all lightweight HTTP (no headless browser), each isolated with its own timeout. |
 | AI validation | **Pydantic v2** | End-to-end typed pipeline — agents pass validated models, never raw dicts; bad LLM output fails loudly at the boundary. |
 | Config | **pydantic-settings** | Validates secrets at startup (fail-fast with a clear message) instead of failing silently on the first API call. |
 | Logging | **loguru** | Structured, colored, rotating file logs — replaces `print()` and ad-hoc logging config. |
@@ -76,7 +76,7 @@ Unlike traditional stock news summarizers, StockStalker-AI combines **Multi-Agen
 | Async DB | **aiosqlite** | Non-blocking SQLite using only portable SQL (no SQLite-only functions) so it can migrate to PostgreSQL. |
 | Agent framework | **Custom (`BaseAgent`)** | ~100 lines of explicit, inspectable agent internals (timing, logging, error capture) vs. the opaque magic of CrewAI/AutoGen. |
 | LLM | **Gemini 2.5 Flash Lite** | Structured output (validated objects, no string parsing), strong quality, generous free tier; pluggable via a provider-agnostic factory (OpenAI/Anthropic/etc.). |
-| Concurrency | **asyncio.gather** | 4 sources scraped concurrently (~12s) instead of sequentially (~30s); multiple tickers analyzed under a semaphore. |
+| Concurrency | **asyncio.gather** | 4 sources scraped concurrently (~3-4s) instead of sequentially; multiple tickers analyzed under a semaphore. |
 | Interactive CLI | **rich + questionary** | Colored panels/tables/spinners plus an arrow-key menu, so the tool is pleasant to use interactively (`stockstalker`) as well as scriptably. |
 
 ## Design Decisions
@@ -85,7 +85,7 @@ Unlike traditional stock news summarizers, StockStalker-AI combines **Multi-Agen
 
 **2. ChromaDB vector memory, not just SQL history.** SQL can tell you *that* a ticker was analyzed before; it can't tell you *which past events resemble today's news*. The Memory Agent embeds prior articles in ChromaDB and retrieves the semantically closest ones, so the synthesis can say "this echoes the supply-chain concern from last week." SQL still stores the structured analyses (for the sentiment-trend and recency signals); the two are complementary.
 
-**3. All scrapers concurrent with `asyncio.gather`.** The four sources are independent I/O-bound calls, so running them sequentially just adds their latencies. `gather` overlaps them, and each is wrapped in an isolated task with its own timeout — one slow or failing source (e.g. the browser-based TradingView crawl) can't abort the others or blow the latency budget.
+**3. All scrapers concurrent with `asyncio.gather`.** The four sources are independent I/O-bound calls, so running them sequentially just adds their latencies. `gather` overlaps them, and each is wrapped in an isolated task with its own timeout — one slow or blocked source (e.g. a 403'd Finviz request) can't abort the others or blow the latency budget.
 
 **4. Pydantic for everything.** Every boundary — a scraped `Article`, an agent's `AgentResult`, the final `TickerAnalysis` — is a validated Pydantic model. This means an agent literally cannot pass a malformed object downstream, the LLM's structured output is validated on arrival, and the whole pipeline is autocomplete-friendly and self-documenting. Typing the pipeline end-to-end turns a class of silent runtime bugs into loud, located errors.
 
@@ -214,7 +214,7 @@ Measured on live runs (free-tier Gemini, single developer machine):
 
 | Operation | Time | Notes |
 |---|---|---|
-| Scraping (4 sources, concurrent) | **~12s** / ticker | Polygon + Finviz productive (~45 articles); TradingView/EDGAR selectors are known follow-ups. |
+| Scraping (4 sources, concurrent) | **~3-4s** / ticker | Polygon + Finviz + Yahoo & Google News RSS (~90 articles for AAPL); all HTTP, no headless browser. |
 | Full single-ticker analysis | **~32s** | Scrape → memory → news + quant → synthesis → persist. |
 | 3-ticker concurrent batch | **~58s** | vs. ~96s if run sequentially → **~40% faster**. Not 3× because the shared LLM rate limiter (0.9 calls/s) serializes the model calls; the scrapes overlap fully. |
 
@@ -223,7 +223,7 @@ Cross-run memory is verified end-to-end: a second analysis of the same ticker re
 ## vs. StockStalker v1
 
 - **Async vs. synchronous** — `asyncio` throughout (httpx, aiosqlite, concurrent scrape + multi-ticker batch) instead of blocking, one-thing-at-a-time `requests`.
-- **4 sources vs. 3** — adds SEC EDGAR alongside Polygon, Finviz, and TradingView, each isolated and individually timed.
+- **4 sources vs. 3** — Polygon, Finviz, Yahoo Finance RSS, and Google News RSS, each isolated and individually timed (all lightweight HTTP — no headless browser).
 - **Vector memory vs. SQL-only** — ChromaDB RAG so each run is informed by semantically similar past events, not just a flat history table.
 - **Typed pipeline vs. dict passing** — validated Pydantic models at every boundary instead of free-form dictionaries.
 - **Multi-agent vs. monolithic** — specialized Memory/News/Quant agents coordinated by an orchestrator, replacing one big summarize-everything function.
