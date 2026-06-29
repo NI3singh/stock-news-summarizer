@@ -12,6 +12,7 @@ import re
 from collections import Counter
 from statistics import mean
 
+from stockstalker.credibility import credibility_for
 from stockstalker.schemas import Article, NewsAnalysis
 from stockstalker.utils import logger
 
@@ -94,3 +95,30 @@ def vader_news_analysis(ticker: str, articles: list[Article]) -> NewsAnalysis:
         summary=summary,
         what_changed=what_changed,
     )
+
+
+def score_articles(articles: list[Article]) -> float | None:
+    """Set per-article VADER sentiment + source credibility on each article and
+    return the credibility-weighted composite (None if there are no articles).
+
+    Mutates the Article objects in place — NewsAgent calls this on every path so
+    the persisted ``articles_used`` JSON carries per-article scores.
+    """
+    if not articles:
+        return None
+
+    weighted = 0.0
+    total_weight = 0.0
+    for article in articles:
+        score = _compound(f"{article.title}. {article.content or ''}"[:1000])
+        cred = credibility_for(article.source)
+        article.sentiment_score = round(max(-1.0, min(1.0, score)), 4)
+        article.credibility_score = round(max(0.0, min(1.0, cred)), 4)
+        weighted += score * cred
+        total_weight += cred
+
+    if total_weight > 0:
+        composite = weighted / total_weight
+    else:  # all-zero credibility (won't happen with the 0.5 default) — plain mean
+        composite = mean(a.sentiment_score for a in articles)
+    return round(max(-1.0, min(1.0, composite)), 4)

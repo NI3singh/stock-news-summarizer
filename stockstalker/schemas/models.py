@@ -18,7 +18,8 @@ class Article(BaseModel):
     ticker: str
     published_at: datetime | None = None
     content: str = ""
-    credibility_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    credibility_score: float = Field(default=0.0, ge=0.0, le=1.0)  # source weight 0..1
+    sentiment_score: float = Field(default=0.0, ge=-1.0, le=1.0)   # per-article VADER score
 
     @field_validator("title", "url")
     @classmethod
@@ -51,6 +52,9 @@ class NewsAnalysis(BaseModel):
     key_themes: list[str] = Field(default_factory=list)
     summary: str = ""
     what_changed: str = ""
+    # Credibility-weighted composite of per-article VADER scores — surfaced
+    # alongside the holistic sentiment_score above. None until articles are scored.
+    composite_sentiment: float | None = None
 
 
 class QuantAnalysis(BaseModel):

@@ -3,7 +3,8 @@
 All offline: VADER runs locally and the NewsAgent tests mock/omit the LLM.
 """
 from stockstalker.agents.news_agent import NewsAgent
-from stockstalker.agents.vader_sentiment import vader_news_analysis
+from stockstalker.agents.vader_sentiment import score_articles, vader_news_analysis
+from stockstalker.credibility import credibility_for
 from stockstalker.llm.client import LLMError
 from stockstalker.schemas import AgentContext, Article, NewsAnalysis
 
@@ -87,3 +88,39 @@ async def test_news_agent_falls_back_to_vader_on_llm_failure(monkeypatch):
     assert result.success  # fell back instead of failing the agent
     assert result.data.selected_articles
     assert -1.0 <= result.data.sentiment_score <= 1.0
+    assert result.data.composite_sentiment is not None  # scored on every path
+
+
+# --- Source credibility + composite ---------------------------------------
+
+def test_credibility_tiers():
+    assert credibility_for("Polygon (Reuters)") == 1.0
+    assert credibility_for("Finviz (Bloomberg)") == 1.0
+    assert credibility_for("Google News (CNBC)") == 0.9
+    assert credibility_for("Yahoo Finance") == 0.78
+    assert credibility_for("Google News (Some Random Blog)") == 0.5  # unknown -> default
+    assert credibility_for("") == 0.5
+
+
+def test_score_articles_per_article_and_weighted_composite():
+    arts = _articles([
+        ("Apple soars on blockbuster earnings beat and record profit", "great"),
+        ("Apple tumbles on weak guidance and lawsuit fears", "bad"),
+    ])
+    arts[0].source = "Polygon (Reuters)"          # credibility 1.0 (positive article)
+    arts[1].source = "Google News (Some Blog)"    # credibility 0.5 (negative article)
+
+    composite = score_articles(arts)
+    assert composite is not None and -1.0 <= composite <= 1.0
+    for a in arts:
+        assert -1.0 <= a.sentiment_score <= 1.0
+        assert 0.0 <= a.credibility_score <= 1.0
+    assert arts[0].credibility_score == 1.0
+    assert arts[1].credibility_score == 0.5
+    # the high-credibility positive article pulls the composite above the plain mean
+    plain_mean = (arts[0].sentiment_score + arts[1].sentiment_score) / 2
+    assert composite > plain_mean
+
+
+def test_score_articles_empty():
+    assert score_articles([]) is None

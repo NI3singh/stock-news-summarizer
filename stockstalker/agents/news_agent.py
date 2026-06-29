@@ -9,7 +9,7 @@ import json
 import time
 
 from stockstalker.agents.base import BaseAgent
-from stockstalker.agents.vader_sentiment import vader_news_analysis
+from stockstalker.agents.vader_sentiment import score_articles, vader_news_analysis
 from stockstalker.config import settings
 from stockstalker.llm.client import LLMError
 from stockstalker.llm.prompts import news_analyze_prompt, news_select_prompt
@@ -27,27 +27,23 @@ class NewsAgent(BaseAgent):
                 data=None,
             )
 
-        # Fast path: rule-based engine explicitly selected — skip the LLM entirely.
+        # Produce the NewsAnalysis: rule-based fast path, or the LLM path with an
+        # automatic VADER fallback if Gemini is unreachable.
         if settings.sentiment_engine.lower() == "vader":
             logger.info("[{}] sentiment_engine=vader — using rule-based path", self.name)
-            return AgentResult(
-                agent_name=self.name,
-                success=True,
-                data=vader_news_analysis(context.ticker, context.articles),
-            )
+            news_analysis = vader_news_analysis(context.ticker, context.articles)
+        else:
+            try:
+                news_analysis = await self._analyze_with_llm(context)
+            except LLMError as exc:
+                logger.warning(
+                    "[{}] LLM unavailable ({}) — falling back to VADER", self.name, exc
+                )
+                news_analysis = vader_news_analysis(context.ticker, context.articles)
 
-        # Default: LLM path, with an automatic VADER fallback if Gemini is unreachable.
-        try:
-            news_analysis = await self._analyze_with_llm(context)
-        except LLMError as exc:
-            logger.warning(
-                "[{}] LLM unavailable ({}) — falling back to VADER", self.name, exc
-            )
-            return AgentResult(
-                agent_name=self.name,
-                success=True,
-                data=vader_news_analysis(context.ticker, context.articles),
-            )
+        # Per-article sentiment + source credibility, and the credibility-weighted
+        # composite — applied on every path (mutates the selected articles in place).
+        news_analysis.composite_sentiment = score_articles(news_analysis.selected_articles)
 
         return AgentResult(agent_name=self.name, success=True, data=news_analysis)
 

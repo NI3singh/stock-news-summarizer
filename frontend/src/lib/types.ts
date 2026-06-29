@@ -15,6 +15,8 @@ export interface Article {
   ticker: string;
   published_at: string | null;
   content: string;
+  credibility_score?: number; // source weight 0..1
+  sentiment_score?: number; // per-article VADER score -1..1
 }
 
 export interface TechnicalSignals {
@@ -72,6 +74,7 @@ export interface SummaryRow {
   memory_context: MemoryContext | null;
   key_themes: string[] | null;
   technical_signals: TechnicalSignals | null;
+  composite_sentiment: number | null; // credibility-weighted composite
 }
 
 export interface SummaryResponse {

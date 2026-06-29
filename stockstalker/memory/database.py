@@ -24,6 +24,7 @@ from sqlalchemy import (
     Text,
     insert,
     select,
+    text,
     update,
 )
 from sqlalchemy.exc import IntegrityError
@@ -94,6 +95,7 @@ analyses_t = Table(
     Column("memory_context", Text),
     Column("key_themes", Text),
     Column("technical_signals", Text),
+    Column("composite_sentiment", Float),
 )
 
 agent_runs_t = Table(
@@ -131,6 +133,13 @@ alert_events_t = Table(
     Column("message", Text),
     Column("delivered", Integer, default=0),
 )
+
+
+# Idempotent ALTERs for pre-existing tables (create_all won't alter existing ones).
+# Each runs in its own transaction; a "duplicate column" error is caught + ignored.
+_MIGRATIONS = [
+    "ALTER TABLE analyses ADD COLUMN composite_sentiment FLOAT",
+]
 
 
 # --- Engine cache (one per URL; loop-agnostic because NullPool holds no connections) ---
@@ -194,6 +203,14 @@ class DatabaseManager:
         """Create all tables if they do not already exist (idempotent)."""
         async with self._engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
+        # Idempotent column additions for pre-existing tables (each in its own
+        # transaction so a "column already exists" error can't poison the rest).
+        for statement in _MIGRATIONS:
+            try:
+                async with self._engine.begin() as conn:
+                    await conn.execute(text(statement))
+            except Exception:  # noqa: BLE001 — column already exists
+                pass
         logger.debug("Database initialised ({})", self.db_url.split("@")[-1])
 
     async def add_ticker(self, symbol: str) -> bool:
@@ -269,6 +286,7 @@ class DatabaseManager:
                     memory_context=memory_context,
                     key_themes=key_themes,
                     technical_signals=technical_signals,
+                    composite_sentiment=analysis.news.composite_sentiment,
                 )
             )
         logger.debug("Analysis saved for {}", ticker)

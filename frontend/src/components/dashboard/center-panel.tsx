@@ -73,9 +73,23 @@ export function CenterPanel({
         </div>
       ) : (
         <div className="space-y-5">
-          {/* Sentiment gauge */}
-          <div className="qm-elevate bg-green-glow relative flex justify-center overflow-hidden rounded-xl border border-qm-border bg-qm-card py-8">
+          {/* Sentiment gauge + credibility-weighted composite */}
+          <div className="qm-elevate bg-green-glow relative flex flex-col items-center gap-2 overflow-hidden rounded-xl border border-qm-border bg-qm-card py-8">
             <SentimentGauge score={latest.sentiment_score ?? 0} size="lg" />
+            {latest.composite_sentiment != null && (
+              <div className="text-xs text-qm-text3">
+                Credibility-weighted composite:{" "}
+                <span
+                  className={cn(
+                    "font-semibold tabular-nums",
+                    latest.composite_sentiment >= 0 ? "text-qm-green" : "text-qm-red",
+                  )}
+                >
+                  {latest.composite_sentiment >= 0 ? "+" : ""}
+                  {latest.composite_sentiment.toFixed(2)}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Key themes */}
