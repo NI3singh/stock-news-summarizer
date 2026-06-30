@@ -40,30 +40,37 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const DEV_KEY = "qm_dev_user";
 
+/** Restore a dev mock user from localStorage (browser-only; null during SSR). */
+function readDevUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(DEV_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  // With Firebase we start signed-out + loading until the first auth callback; in
+  // the dev fallback the user is known synchronously from localStorage, so seed it
+  // at init (avoids a setState-in-effect) and start un-loaded.
+  const [user, setUser] = useState<AuthUser | null>(() =>
+    isFirebaseConfigured ? null : readDevUser(),
+  );
+  const [loading, setLoading] = useState(isFirebaseConfigured);
 
   useEffect(() => {
-    if (isFirebaseConfigured && firebaseAuth) {
-      const unsub = onAuthStateChanged(firebaseAuth, (fbUser) => {
-        setUser(
-          fbUser
-            ? { uid: fbUser.uid, email: fbUser.email, displayName: fbUser.displayName }
-            : null
-        );
-        setLoading(false);
-      });
-      return () => unsub();
-    }
-    // Dev fallback — restore any mock user from localStorage
-    try {
-      const raw = localStorage.getItem(DEV_KEY);
-      setUser(raw ? (JSON.parse(raw) as AuthUser) : null);
-    } catch {
-      setUser(null);
-    }
-    setLoading(false);
+    if (!(isFirebaseConfigured && firebaseAuth)) return;
+    const unsub = onAuthStateChanged(firebaseAuth, (fbUser) => {
+      setUser(
+        fbUser
+          ? { uid: fbUser.uid, email: fbUser.email, displayName: fbUser.displayName }
+          : null,
+      );
+      setLoading(false);
+    });
+    return () => unsub();
   }, []);
 
   const setDevUser = useCallback((u: AuthUser | null) => {

@@ -58,26 +58,18 @@ export default function TelegramSetupPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [token, setToken] = useState("");
   const [copied, setCopied] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [polledConnected, setPolledConnected] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  // Derived state (not effect-synced): connected when the backend reports it OR
+  // our local poll detected it — avoids a setState-in-effect to mirror the query.
+  const connected = Boolean(status?.connected) || polledConnected;
 
   const botUsername = status?.bot_username || "StockStalkerBot";
   const command = `/start ${token}`;
 
-  // Generate the display token client-side to avoid an SSR hydration mismatch.
-  useEffect(() => {
-    setToken(crypto.randomUUID().slice(0, 8).toUpperCase());
-  }, []);
-
-  // If the backend already reports connected, jump straight to success.
-  useEffect(() => {
-    if (status?.connected) setConnected(true);
-  }, [status?.connected]);
-
   // Poll every 3s while on step 3; give up after 30s.
   useEffect(() => {
     if (step !== 3 || connected) return;
-    setTimedOut(false);
     let elapsed = 0;
     const poll = setInterval(async () => {
       elapsed += 3;
@@ -85,7 +77,7 @@ export default function TelegramSetupPage() {
         const s = await api.getAlertStatus();
         if (s.connected) {
           clearInterval(poll);
-          setConnected(true);
+          setPolledConnected(true);
           return;
         }
       } catch {
@@ -123,7 +115,7 @@ export default function TelegramSetupPage() {
 
   const checkNow = async () => {
     const s = await api.getAlertStatus();
-    if (s.connected) setConnected(true);
+    if (s.connected) setPolledConnected(true);
   };
 
   return (
@@ -149,7 +141,15 @@ export default function TelegramSetupPage() {
               Or search for <span className="font-mono text-qm-text2">@{botUsername}</span> in your
               Telegram app.
             </p>
-            <Button className="w-full" onClick={() => setStep(2)}>
+            <Button
+              className="w-full"
+              onClick={() => {
+                // Generate the display token lazily (client-only) on first entry to
+                // step 2, where the /start command is shown — avoids an SSR mismatch.
+                setToken((t) => t || crypto.randomUUID().slice(0, 8).toUpperCase());
+                setStep(2);
+              }}
+            >
               Next: I&apos;ve opened it →
             </Button>
           </div>
@@ -174,7 +174,13 @@ export default function TelegramSetupPage() {
               <Button variant="secondary" className="flex-1" onClick={() => setStep(1)}>
                 ← Back
               </Button>
-              <Button className="flex-1" onClick={() => setStep(3)}>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  setTimedOut(false);
+                  setStep(3);
+                }}
+              >
                 I&apos;ve sent it →
               </Button>
             </div>
