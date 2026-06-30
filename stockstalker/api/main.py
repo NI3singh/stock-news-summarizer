@@ -764,7 +764,7 @@ async def create_alert_rule(rule_data: dict):
 
 @app.delete("/api/alerts/rules/{rule_id}")
 async def delete_alert_rule(rule_id: int):
-    await get_runner().db.deactivate_alert_rule(rule_id)
+    await get_runner().db.delete_alert_rule(rule_id)
     return {"success": True}
 
 

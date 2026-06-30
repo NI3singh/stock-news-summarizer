@@ -22,6 +22,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    delete,
     insert,
     select,
     text,
@@ -425,11 +426,12 @@ class DatabaseManager:
                 .values(last_triggered_at=_now_iso())
             )
 
-    async def deactivate_alert_rule(self, rule_id: int) -> None:
-        """Soft-delete an alert rule (set is_active = 0)."""
+    async def delete_alert_rule(self, rule_id: int) -> None:
+        """Permanently delete an alert rule (hard delete). Disabling without
+        deleting is a separate action — see set_alert_rule_active()."""
         async with self._engine.begin() as conn:
             await conn.execute(
-                update(alert_rules_t).where(alert_rules_t.c.id == rule_id).values(is_active=0)
+                delete(alert_rules_t).where(alert_rules_t.c.id == rule_id)
             )
 
     async def get_all_alert_rules(self) -> list[AlertRule]:
