@@ -10,12 +10,17 @@
 
 </div>
 
+---
 
 ## 🎬 Watch the Website Tour
 
-<a href="https://youtu.be/NFoiecE-uYs?si=tLaJnazA-xBl4AEt">
+<div align="center">
+
+<a href="https://youtu.be/Tqkj1PxBChk">
   <img src="docs/tour-poster.png" alt="Watch the StockStalker AI demo" width="760">
 </a>
+
+</div>
 
 *`docs/website-tour.mp4` — a 40-second animated walkthrough (dashboard, the multi-agent pipeline, and integrations), rendered with Remotion.*
 
