@@ -44,3 +44,5 @@ frontend-plan/*
 frontend-plan/
 # Auto-generated doc export (VS Code extension); do not track
 stock-news-summarizer_Documentation.md
+
+.claude/
