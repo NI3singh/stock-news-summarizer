@@ -117,6 +117,26 @@ Background Workers aren't offered on the free plan.)
 
 ---
 
+## Optional — MCP server (AI assistants)
+StockStalker exposes 5 tools (get analysis, run analysis, watchlist, compare,
+status) to MCP clients (Claude Desktop, Cursor). It's **mounted onto the API at
+`/mcp`** by default (`ENABLE_MCP=true`), so your single backend service serves it
+too — no extra service or port:
+
+- URL: `https://stockstalker-backend.onrender.com/mcp`
+- Connect a client — e.g. Claude Desktop `claude_desktop_config.json`:
+  ```json
+  { "mcpServers": { "stockstalker": {
+    "command": "npx",
+    "args": ["mcp-remote", "https://stockstalker-backend.onrender.com/mcp"] } } }
+  ```
+  (Cursor: add the same URL.) The web **MCP Server** page shows live status + the URL.
+
+Set `ENABLE_MCP=false` to turn it off, or run it standalone instead via
+`stockstalker mcp-server` (its own process/port — needs a separate service).
+
+---
+
 ## Environment variables reference
 
 **Backend**
@@ -130,6 +150,7 @@ Background Workers aren't offered on the free plan.)
 | `PYTHON_VERSION` | rec | `3.12` |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | – | optional bot + alerts |
 | `ENABLE_BACKGROUND_JOBS` | – | `true` = run bot poller + scheduler in the API process (single-service). Don't also run the worker. |
+| `ENABLE_MCP` | – | mount the MCP server at `/mcp` on the API (default `true`); `false` to disable |
 
 **Frontend**
 

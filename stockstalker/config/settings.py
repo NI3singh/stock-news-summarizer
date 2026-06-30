@@ -76,9 +76,13 @@ class Settings(BaseSettings):
     # `run-scheduler` when this is True — two pollers conflict on one bot token.
     enable_background_jobs: bool = False
 
-    # MCP server (Phase C) — host/port for the FastMCP server (optional).
+    # MCP server (Phase C) — host/port for the standalone FastMCP server (optional).
     mcp_server_host: str = "127.0.0.1"
     mcp_server_port: int = 8765
+    # Mount the MCP server onto the API at /mcp (single-service). True = the API also
+    # serves MCP (no separate process). Set False to only run MCP standalone via
+    # `main.py mcp-server` / `run-scheduler --with-mcp`.
+    enable_mcp: bool = True
 
     model_config = SettingsConfigDict(
         env_file=str(_ENV_PATH),

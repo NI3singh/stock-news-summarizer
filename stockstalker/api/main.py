@@ -8,10 +8,10 @@ Run with:  ``python stockstalker/main.py api``  (or ``stockstalker api``) → po
 """
 import asyncio
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from threading import Lock
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ValidationError
@@ -24,6 +24,20 @@ _runner = None
 _scheduler = None  # DailyScheduler instance when ENABLE_BACKGROUND_JOBS runs jobs in-process
 _jobs: dict = {}
 _jobs_lock = Lock()
+
+# Optionally mount the MCP server (Phase C) onto THIS API so a single service also
+# serves MCP at /mcp — no separate process or port. Stateless transport so it
+# composes with the API's own lifespan. Guarded: any failure disables /mcp but
+# never blocks the API. Built once here; its lifespan is run + it's mounted below.
+_mcp_app = None
+if settings.enable_mcp:
+    try:
+        from stockstalker.integrations.mcp_server import mcp as _mcp_instance
+
+        _mcp_app = _mcp_instance.http_app(path="/mcp", stateless_http=True)
+    except Exception as exc:  # noqa: BLE001 — never let MCP setup crash the API
+        logger.warning("MCP mount unavailable ({}); /mcp disabled.", exc)
+        _mcp_app = None
 
 
 @asynccontextmanager
@@ -60,8 +74,20 @@ async def lifespan(app: FastAPI):
         _scheduler.start()
         logger.info("Background jobs enabled — scheduler running inside the API process")
 
+    # Inject the shared runner into the mounted MCP tools (if MCP is mounted).
+    if _mcp_app is not None:
+        from stockstalker.integrations.mcp_server import set_runner
+
+        set_runner(_runner)
+
     logger.info("StockStalker API started")
-    yield
+
+    async with AsyncExitStack() as stack:
+        if _mcp_app is not None:
+            # Run the MCP app's own lifespan (boots its streamable-http manager).
+            await stack.enter_async_context(_mcp_app.lifespan(app))
+            logger.info("MCP server mounted at /mcp")
+        yield
 
     if _scheduler is not None:
         try:
@@ -806,17 +832,31 @@ async def _list_mcp_tools() -> list[dict]:
 
 
 @app.get("/api/mcp/status")
-async def mcp_status():
+async def mcp_status(request: Request):
+    tools = await _list_mcp_tools()
+    # Mounted into this API (default): MCP is served at <this origin>/mcp — it's up
+    # whenever the API is up, so report it directly instead of probing a port.
+    if _mcp_app is not None:
+        scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+        return {
+            "running": True,
+            "mode": "mounted",
+            "host": request.url.hostname,
+            "port": request.url.port,
+            "url": f"{scheme}://{request.url.netloc}/mcp",
+            "tools": tools,
+        }
+    # Standalone mode: the MCP server runs as a separate process — probe its port.
     host = settings.mcp_server_host
     port = settings.mcp_server_port
-    # The MCP server runs as a SEPARATE process — probe the port to detect it.
     probe_host = "127.0.0.1" if host in ("0.0.0.0", "") else host
     return {
         "running": await _probe_tcp(probe_host, port),
+        "mode": "standalone",
         "host": host,
         "port": port,
         "url": f"http://{host}:{port}/mcp",
-        "tools": await _list_mcp_tools(),
+        "tools": tools,
     }
 
 
@@ -844,3 +884,9 @@ async def _run_job(job_id: str, symbol: str):
         with _jobs_lock:
             _jobs[job_id]["status"] = "failed"
             _jobs[job_id]["result"] = {"error": str(e)}
+
+
+# Mount the MCP app LAST so the explicit API routes above always match first; the
+# catch-all then handles only /mcp (404 for anything else).
+if _mcp_app is not None:
+    app.mount("/", _mcp_app)

@@ -172,8 +172,9 @@ export interface McpTool {
 
 export interface McpStatus {
   running: boolean;
-  host: string;
-  port: number;
+  mode?: "mounted" | "standalone";
+  host?: string;
+  port?: number | null;
   url: string;
   tools: McpTool[];
 }
