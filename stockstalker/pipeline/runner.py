@@ -4,7 +4,7 @@ The single long-lived object that owns every shared resource — the database,
 vector store, LLM client, scraper orchestrator, and the agent orchestrator — and
 reuses them for every ticker. Resources are built ONCE in ``__init__`` (never
 per call), so a long-running scheduler or a batch run pays the heavy setup cost
-(Chroma client, LangChain model, etc.) exactly once.
+(vector store, LangChain model, etc.) exactly once.
 
 The five heavy resource imports are deferred into ``__init__`` so that merely
 importing this module (e.g. for the CLI's argparse wiring) stays cheap —

@@ -2,7 +2,7 @@
 
 Exposes the CLI pipeline over HTTP so the Next.js frontend can drive it. A single
 long-lived ``PipelineRunner`` is created once in the lifespan handler and reused
-for every request (heavy resources — Chroma, LangChain, scrapers — built once).
+for every request (heavy resources — vector store, LangChain, scrapers — built once).
 
 Run with:  ``python stockstalker/main.py api``  (or ``stockstalker api``) → port 8000.
 """

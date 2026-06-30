@@ -56,6 +56,9 @@ class AlertEngine:
                     )
 
             elif rule.condition_type == AlertConditionType.NEW_SEC_FILING:
+                # Dormant: the SEC EDGAR source was removed (re-adding it is on the
+                # roadmap). Kept so the path works when EDGAR returns; the create-rule
+                # UI no longer offers this condition for now.
                 sec_articles = [
                     a
                     for a in analysis.news.selected_articles

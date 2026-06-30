@@ -2,7 +2,7 @@
 
 Marked ``live``. Run: pytest stockstalker/tests/test_memory_rag.py -v -m live -s
 Run 1 on a fresh ticker (NVDA) has no history; Run 2 must retrieve Run 1's
-analysis (SQLite) and indexed articles (ChromaDB) — proving the RAG loop.
+analysis (SQL) and indexed articles (vector store) — proving the RAG loop.
 NOTE: not idempotent — Run 1 asserts NVDA is fresh, so it expects a clean store.
 """
 import asyncio
@@ -54,9 +54,9 @@ async def test_memory_accumulates_across_runs():
     print(f"Run 2 memory — days_of_history: {memory2.days_of_history}")
     print(f"Run 2 memory — similar_events count: {len(memory2.similar_past_events)}")
     print(f"Run 2 memory — trend: {memory2.historical_sentiment_trend}")
-    # On the second run, both SQLite and ChromaDB hold data from run 1.
+    # On the second run, both SQL and the vector store hold data from run 1.
     assert memory2.days_of_history >= 1, "Second run must show DB history from run 1"
-    assert len(memory2.similar_past_events) > 0, "Second run must retrieve ChromaDB events from run 1"
+    assert len(memory2.similar_past_events) > 0, "Second run must retrieve vector-store events from run 1"
 
     # --- DIFF ---
     print("\n=== SYNTHESIS COMPARISON ===")

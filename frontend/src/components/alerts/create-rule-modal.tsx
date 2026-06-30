@@ -10,7 +10,6 @@ import type { AlertConditionType } from "@/lib/types";
 const CONDITIONS: { value: AlertConditionType; label: string }[] = [
   { value: "sentiment_below", label: "Sentiment drops below threshold" },
   { value: "sentiment_above", label: "Sentiment rises above threshold" },
-  { value: "new_sec_filing", label: "New SEC 8-K filing detected" },
   { value: "daily_summary", label: "Daily morning summary" },
 ];
 
