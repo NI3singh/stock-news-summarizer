@@ -14,6 +14,7 @@ import { WhatChangedBox } from "@/components/dashboard/what-changed-box";
 import { SourceArticles } from "@/components/dashboard/source-articles";
 import { HistoryAccordion } from "@/components/dashboard/history-accordion";
 import { MarketDataCard } from "@/components/dashboard/market-data-card";
+import { AnalysisInProgress } from "@/components/dashboard/analysis-in-progress";
 
 function StatCard({
   label,
@@ -82,12 +83,16 @@ export default function TickerDetailPage() {
           <Loader2 className="h-4 w-4 animate-spin text-qm-green" /> Loading {ticker}...
         </div>
       ) : !latest ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-qm-border py-20 text-center">
-          <p className="text-qm-text2">
-            No analysis yet for <span className="font-semibold text-qm-text">{ticker}</span>.
-          </p>
-          <div className="mt-4">{refreshButton}</div>
-        </div>
+        processing ? (
+          <AnalysisInProgress key={ticker} ticker={ticker} />
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-qm-border py-20 text-center">
+            <p className="text-qm-text2">
+              No analysis yet for <span className="font-semibold text-qm-text">{ticker}</span>.
+            </p>
+            <div className="mt-4">{refreshButton}</div>
+          </div>
+        )
       ) : (
         <div className="space-y-6">
           {/* ROW 1 — stat cards */}

@@ -16,13 +16,8 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  useAddTicker,
-  useRemoveTicker,
-  useSummary,
-  useTickers,
-} from "@/hooks/use-tickers";
-import { useRefreshTicker } from "@/hooks/use-refresh";
+import { useRemoveTicker, useSummary, useTickers } from "@/hooks/use-tickers";
+import { useAddAndAnalyze, useRefreshTicker } from "@/hooks/use-refresh";
 import { useDashboardStore } from "@/stores/dashboard-store";
 
 const NAV_ITEMS = [
@@ -129,14 +124,14 @@ export function Sidebar() {
   const collapsed = useDashboardStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useDashboardStore((s) => s.toggleSidebar);
   const { data: tickers } = useTickers();
-  const addTicker = useAddTicker();
+  const { add, isPending } = useAddAndAnalyze();
   const [newTicker, setNewTicker] = useState("");
 
   const handleAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter") return;
     const symbol = newTicker.trim().toUpperCase();
     if (/^[A-Z]{1,10}$/.test(symbol)) {
-      addTicker.mutate(symbol);
+      add(symbol);
       setNewTicker("");
     }
   };
@@ -167,7 +162,7 @@ export function Sidebar() {
               placeholder="Add ticker..."
               className="w-full rounded-md border border-qm-border bg-qm-bg py-1.5 pl-8 pr-8 text-sm text-qm-text placeholder:text-qm-text3 focus:border-qm-green focus:outline-none"
             />
-            {addTicker.isPending && (
+            {isPending && (
               <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-qm-green" />
             )}
           </div>

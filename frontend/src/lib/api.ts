@@ -16,14 +16,24 @@ export const api = {
   getTickers: (): Promise<TickersResponse> =>
     fetch(`${BASE}/api/tickers`).then((r) => r.json()),
 
-  addTicker: (
+  addTicker: async (
     symbol: string,
-  ): Promise<{ success: boolean; message?: string; detail?: string }> =>
-    fetch(`${BASE}/api/tickers`, {
+  ): Promise<{
+    ok: boolean;
+    status: number;
+    success?: boolean;
+    job_id?: string;
+    message?: string;
+    detail?: string;
+  }> => {
+    const r = await fetch(`${BASE}/api/tickers`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol }),
-    }).then((r) => r.json()),
+    });
+    const body = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, ...body };
+  },
 
   removeTicker: (symbol: string): Promise<{ success: boolean; message: string }> =>
     fetch(`${BASE}/api/tickers/${symbol}`, { method: "DELETE" }).then((r) => r.json()),
