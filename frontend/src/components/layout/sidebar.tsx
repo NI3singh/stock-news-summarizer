@@ -23,8 +23,8 @@ import { useDashboardStore } from "@/stores/dashboard-store";
 const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/history", icon: Clock, label: "History" },
-  { href: "/alerts", icon: Bell, label: "Alerts", badge: "B", badgeClass: "bg-blue-500" },
-  { href: "/mcp", icon: Link2, label: "MCP Server", badge: "C", badgeClass: "bg-purple-500" },
+  { href: "/alerts", icon: Bell, label: "Alerts" },
+  { href: "/mcp", icon: Link2, label: "MCP Server" },
 ];
 
 function sentimentDot(score: number | null | undefined): string {
@@ -199,16 +199,6 @@ export function Sidebar() {
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
               {!collapsed && <span>{item.label}</span>}
-              {!collapsed && item.badge && (
-                <span
-                  className={cn(
-                    "ml-auto rounded px-1.5 text-[10px] font-bold text-white",
-                    item.badgeClass,
-                  )}
-                >
-                  {item.badge}
-                </span>
-              )}
             </Link>
           );
         })}
