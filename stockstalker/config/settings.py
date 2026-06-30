@@ -5,8 +5,25 @@ file and validated once, at import time, via the module-level ``settings``
 singleton. If a required API key is absent, importing this module fails fast
 with a clear, actionable error.
 """
+from pathlib import Path
+
+from dotenv import load_dotenv
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Absolute path to the project-root .env (this file is stockstalker/config/settings.py).
+_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+
+# Load it with override=True BEFORE Settings is built, so the .env values WIN over
+# any stale shell/OS environment variable. A leftover GEMINI_API_KEY holding an
+# "AQ.*" OAuth token (e.g. injected by a shell profile or gcloud) is the classic
+# cause of Gemini "401 UNAUTHENTICATED / ACCESS_TOKEN_TYPE_UNSUPPORTED": by default
+# pydantic-settings AND os.environ readers (the LLM client reads GEMINI_API_KEY
+# directly) prefer the OS var over .env, so the wrong key gets used. Loading here
+# also makes the key resolve no matter which directory the app is launched from.
+# On a host with no .env file this is a harmless no-op — the platform's real
+# environment variables are used.
+load_dotenv(_ENV_PATH, override=True)
 
 
 class Settings(BaseSettings):
@@ -57,7 +74,7 @@ class Settings(BaseSettings):
     mcp_server_port: int = 8765
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_PATH),
         case_sensitive=False,
         extra="ignore",
     )
