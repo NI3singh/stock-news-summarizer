@@ -202,6 +202,11 @@ services:
 
 ---
 
+## Troubleshooting
+
+- **Deployed app shows no tickers / history.** Data lives in the database, and the watchlist is **shared (not per-user)** — logging in with the same email doesn't carry data over. The backend's `DATABASE_URL` must point at your Supabase; if it's unset the app silently falls back to an **ephemeral SQLite file inside the container** (empty, and wiped on every redeploy). Set `DATABASE_URL` on the backend to the **same** Supabase URL you use locally, then redeploy.
+- **Telegram `Conflict: terminated by other getUpdates request`.** The bot token is being polled in **two places at once** (Telegram allows only one poller per token). Keep `ENABLE_BACKGROUND_JOBS=true` on exactly **one** instance — your deploy — and set it to **false** everywhere else (e.g. your local `.env`), or stop the other instance.
+
 ## Notes
 - **DB schema auto-creates** on first backend boot (`init_db` + pgvector `ensure_schema`); if the pooler role can't `CREATE EXTENSION vector`, enable it once in Supabase → Database → Extensions.
 - **Free Render web services sleep** after ~15 min idle (slow cold start). Use Starter for always-on, or — if you run the bot/scheduler in-process (`ENABLE_BACKGROUND_JOBS`) — keep the free service awake with an uptime pinger (see the Telegram section).

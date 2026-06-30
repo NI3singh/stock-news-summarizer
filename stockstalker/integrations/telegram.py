@@ -34,6 +34,7 @@ class StockStalkerBot:
     def __init__(self, runner: PipelineRunner) -> None:
         self.runner = runner
         self.app = Application.builder().token(settings.telegram_bot_token).build()
+        self._conflict_warned = False
         self._register_handlers()
         logger.info("StockStalkerBot initialized")
 
@@ -301,8 +302,28 @@ class StockStalkerBot:
         await self.app.initialize()
         await self._setup_profile()
         await self.app.start()
-        await self.app.updater.start_polling(drop_pending_updates=True)
+        await self.app.updater.start_polling(
+            drop_pending_updates=True, error_callback=self._on_poll_error
+        )
         logger.info("Bot polling started")
+
+    def _on_poll_error(self, exc: Exception) -> None:
+        """Keep polling errors quiet + actionable — notably the 'two instances'
+        Conflict you get when this bot token is polled in more than one place
+        (e.g. running locally while the deployed app is also polling). Telegram
+        allows only ONE getUpdates poller per token."""
+        from telegram.error import Conflict
+
+        if isinstance(exc, Conflict):
+            if not self._conflict_warned:
+                self._conflict_warned = True
+                logger.warning(
+                    "Telegram polling conflict: this bot token is already being polled "
+                    "elsewhere (likely your deployed app). Run the bot in ONE place — "
+                    "set ENABLE_BACKGROUND_JOBS=false here, or stop the other instance."
+                )
+        else:
+            logger.warning("Telegram polling error: {}", exc)
 
     async def _setup_profile(self) -> None:
         """Register the slash-command menu + bot description shown in Telegram's UI.
