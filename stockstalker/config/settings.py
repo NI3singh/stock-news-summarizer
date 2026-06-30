@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
 
+    # Run the Telegram bot poller + daily scheduler INSIDE the API process, so a
+    # single `main.py api` service does everything (web + bot + scheduled jobs).
+    # Leave False to run them separately via `main.py run-scheduler`. Set True for a
+    # one-service deployment (e.g. a single free web host). Do NOT also run
+    # `run-scheduler` when this is True — two pollers conflict on one bot token.
+    enable_background_jobs: bool = False
+
     # MCP server (Phase C) — host/port for the FastMCP server (optional).
     mcp_server_host: str = "127.0.0.1"
     mcp_server_port: int = 8765

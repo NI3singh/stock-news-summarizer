@@ -42,7 +42,8 @@ New + → **Web Service** → connect repo → branch.
 | `DATABASE_URL` | the Supabase pooler URI |
 | `FRONTEND_ORIGIN` | `https://stockstalker-frontend.onrender.com` (your frontend URL) |
 | `PYTHON_VERSION` | `3.12` |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | *(optional — only for alerts)* |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | *(optional — for the bot + alerts)* |
+| `ENABLE_BACKGROUND_JOBS` | *(optional — `true` runs the bot + scheduler in this service; see Telegram section)* |
 
 Create it. After it's **Live**, check `https://stockstalker-backend.onrender.com/health` → `{"status":"ok"}` and `/docs` for Swagger.
 
@@ -85,12 +86,34 @@ New + → **Web Service** → same repo + branch.
 
 ---
 
-## Optional — Telegram bot
-The bot only *responds* while a polling process runs. Deploy a **Background Worker** (New + → Background Worker), same repo/branch/root, same env vars, with:
+## Optional — Telegram bot + scheduled jobs
+The bot only *answers commands* while a **polling** process runs, and the daily
+refresh/summary + alert pushes need the **scheduler** running. Two ways to host them:
+
+### Option A — one service (best for the free plan)
+Run the bot + scheduler **inside the backend** — no extra service. On the backend
+web service, add one env var:
+
+| Key | Value |
+|---|---|
+| `ENABLE_BACKGROUND_JOBS` | `true` |
+
+Now the single backend process serves the API **and** polls Telegram **and** runs
+the daily jobs. ⚠️ Don't also deploy the worker in Option B — two pollers fight over
+one bot token.
+
+> Free Render web services sleep after ~15 min idle, which pauses the bot + scheduler.
+> Keep it awake with a **free uptime pinger** (e.g. UptimeRobot or cron-job.org)
+> hitting `https://stockstalker-backend.onrender.com/health` every ~10 min. One
+> always-on free service fits within Render's ~750 instance-hours/month.
+
+### Option B — separate Background Worker (needs a paid/always-on plan)
+New + → **Background Worker**, same repo/branch/root + env vars, with:
 - Build: `pip install .`
 - Start: `stockstalker run-scheduler`
 
-This also runs the daily scheduled analysis + alerts.
+Leave `ENABLE_BACKGROUND_JOBS` **unset** on the backend in this case. (Render
+Background Workers aren't offered on the free plan.)
 
 ---
 
@@ -105,7 +128,8 @@ This also runs the daily scheduled analysis + alerts.
 | `DATABASE_URL` | ✅ | Supabase pooler URI (auto-uses asyncpg) |
 | `FRONTEND_ORIGIN` | ✅ | frontend origin(s) for CORS, comma-separated |
 | `PYTHON_VERSION` | rec | `3.12` |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | – | optional alerts |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | – | optional bot + alerts |
+| `ENABLE_BACKGROUND_JOBS` | – | `true` = run bot poller + scheduler in the API process (single-service). Don't also run the worker. |
 
 **Frontend**
 
@@ -159,5 +183,5 @@ services:
 
 ## Notes
 - **DB schema auto-creates** on first backend boot (`init_db` + pgvector `ensure_schema`); if the pooler role can't `CREATE EXTENSION vector`, enable it once in Supabase → Database → Extensions.
-- **Free Render web services sleep** after ~15 min idle (slow cold start). Use Starter for always-on.
+- **Free Render web services sleep** after ~15 min idle (slow cold start). Use Starter for always-on, or — if you run the bot/scheduler in-process (`ENABLE_BACKGROUND_JOBS`) — keep the free service awake with an uptime pinger (see the Telegram section).
 - Frontend can alternatively go to **Vercel** (Next.js native): import repo, root `frontend`, add the same `NEXT_PUBLIC_*` vars; then set the backend `FRONTEND_ORIGIN` to the Vercel URL.

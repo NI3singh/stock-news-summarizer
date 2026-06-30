@@ -11,7 +11,7 @@ import uuid
 from contextlib import asynccontextmanager
 from threading import Lock
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ValidationError
@@ -21,34 +21,59 @@ from stockstalker.utils import logger
 
 # --- Shared state ---
 _runner = None
+_scheduler = None  # DailyScheduler instance when ENABLE_BACKGROUND_JOBS runs jobs in-process
 _jobs: dict = {}
 _jobs_lock = Lock()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _runner
+    global _runner, _scheduler
     from stockstalker.pipeline import PipelineRunner
 
     _runner = PipelineRunner()
     await _runner.initialize()
-    # ML (prediction + entity extraction) is auto-enabled inside the
-    # OrchestratorAgent constructor, so there is no separate enable step.
-    # Enable Telegram if creds are set (no-op otherwise) + initialize the bot's
-    # HTTP client so /api/alerts/test can send. Guarded so a bad/unreachable
-    # token can't crash API startup.
+
+    # Enable Telegram if creds are set (no-op otherwise). Guarded so a bad or
+    # unreachable token can't crash API startup.
     _runner.enable_telegram()
     if _runner.bot is not None:
         try:
-            await _runner.bot.app.initialize()
+            if settings.enable_background_jobs:
+                # Single-service mode: this process ALSO polls Telegram, so the bot
+                # answers commands here (no separate `run-scheduler` needed).
+                await _runner.bot.run_polling()
+            else:
+                # Web-only mode: just init the HTTP client so alert pushes and the
+                # /api/alerts/test button can SEND. Command polling runs separately
+                # via `python main.py run-scheduler`.
+                await _runner.bot.app.initialize()
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Telegram bot init failed ({}); send disabled.", exc)
+            logger.warning("Telegram bot startup failed ({}); disabling bot.", exc)
             _runner.bot = None
+
+    # Single-service mode also runs the daily refresh + summary scheduler in-process.
+    if settings.enable_background_jobs:
+        from stockstalker.pipeline import DailyScheduler
+
+        _scheduler = DailyScheduler(_runner)
+        _scheduler.start()
+        logger.info("Background jobs enabled — scheduler running inside the API process")
+
     logger.info("StockStalker API started")
     yield
+
+    if _scheduler is not None:
+        try:
+            _scheduler.stop()
+        except Exception:  # noqa: BLE001
+            pass
     if _runner.bot is not None:
         try:
-            await _runner.bot.app.shutdown()
+            if settings.enable_background_jobs:
+                await _runner.bot.stop()
+            else:
+                await _runner.bot.app.shutdown()
         except Exception:  # noqa: BLE001
             pass
     logger.info("StockStalker API shutting down")
@@ -568,15 +593,20 @@ async def get_tickers():
 
 
 @app.post("/api/tickers")
-async def add_ticker(req: AddTickerRequest, background_tasks: BackgroundTasks):
+async def add_ticker(req: AddTickerRequest):
     symbol = req.symbol.strip().upper()
     if not symbol or len(symbol) > 10:
         raise HTTPException(400, "Invalid symbol")
     success = await get_runner().db.add_ticker(symbol)
     if not success:
         raise HTTPException(400, f"{symbol} already exists")
-    background_tasks.add_task(_run_analysis_bg, symbol)
-    return {"success": True, "message": f"{symbol} added. Processing..."}
+    # Kick off the first analysis as a TRACKED job (same mechanism as /api/refresh)
+    # so the UI can poll progress and auto-show the result when it completes.
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "pending", "symbol": symbol, "result": None}
+    asyncio.create_task(_run_job(job_id, symbol))
+    return {"success": True, "job_id": job_id, "message": f"{symbol} added. Analyzing..."}
 
 
 @app.delete("/api/tickers/{symbol}")
@@ -814,11 +844,3 @@ async def _run_job(job_id: str, symbol: str):
         with _jobs_lock:
             _jobs[job_id]["status"] = "failed"
             _jobs[job_id]["result"] = {"error": str(e)}
-
-
-async def _run_analysis_bg(symbol: str):
-    """Fire-and-forget analysis for a freshly-added ticker (errors are logged)."""
-    try:
-        await get_runner().analyze_ticker(symbol)
-    except Exception as e:  # noqa: BLE001 — background task; just log
-        logger.error("Background analysis failed for {}: {}", symbol, e)
