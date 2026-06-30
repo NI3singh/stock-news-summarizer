@@ -58,7 +58,7 @@ def _analysis(ticker="AAPL", sentiment=-0.8, sec=False):
 async def test_alert_triggers_on_low_sentiment():
     rule = AlertRule(id=1, ticker="AAPL", condition_type=AlertConditionType.SENTIMENT_BELOW, threshold=-0.4)
     engine = AlertEngine(_mock_db([rule]))
-    msgs = await engine.evaluate("AAPL", _analysis("AAPL", -0.8))
+    msgs = await engine.evaluate("u1", "AAPL", _analysis("AAPL", -0.8))
     assert len(msgs) == 1
     assert "Sentiment Alert" in msgs[0]
 
@@ -67,7 +67,7 @@ async def test_alert_triggers_on_low_sentiment():
 async def test_alert_no_trigger_above_threshold():
     rule = AlertRule(id=1, ticker="AAPL", condition_type=AlertConditionType.SENTIMENT_BELOW, threshold=-0.4)
     engine = AlertEngine(_mock_db([rule]))
-    msgs = await engine.evaluate("AAPL", _analysis("AAPL", 0.5))
+    msgs = await engine.evaluate("u1", "AAPL", _analysis("AAPL", 0.5))
     assert msgs == []
 
 
@@ -75,7 +75,7 @@ async def test_alert_no_trigger_above_threshold():
 async def test_alert_respects_ticker_filter():
     rule = AlertRule(id=1, ticker="MSFT", condition_type=AlertConditionType.SENTIMENT_BELOW, threshold=-0.4)
     engine = AlertEngine(_mock_db([rule]))
-    msgs = await engine.evaluate("AAPL", _analysis("AAPL", -0.8))
+    msgs = await engine.evaluate("u1", "AAPL", _analysis("AAPL", -0.8))
     assert msgs == []
 
 

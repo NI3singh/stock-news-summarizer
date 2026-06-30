@@ -38,6 +38,11 @@ class StockStalkerBot:
         self._register_handlers()
         logger.info("StockStalkerBot initialized")
 
+    @property
+    def _uid(self) -> str:
+        """The user this bot acts on behalf of (the deployer / OWNER_UID)."""
+        return settings.effective_owner_uid
+
     def _register_handlers(self) -> None:
         self.app.add_handler(CommandHandler("start", self.cmd_start))
         self.app.add_handler(CommandHandler("help", self.cmd_help))
@@ -91,11 +96,11 @@ class StockStalkerBot:
         )
 
     async def cmd_status(self, update, context) -> None:
-        tickers = await self.runner.db.get_active_tickers()
+        tickers = await self.runner.db.get_active_tickers(self._uid)
         analyses_today = 0
         for ticker in tickers:
             analyses_today += len(
-                await self.runner.db.get_recent_analyses(ticker, days=1)
+                await self.runner.db.get_recent_analyses(self._uid, ticker, days=1)
             )
         await update.message.reply_text(
             "*System Status* ✅\n\n"
@@ -108,7 +113,7 @@ class StockStalkerBot:
         )
 
     async def cmd_watchlist(self, update, context) -> None:
-        tickers = await self.runner.db.get_active_tickers()
+        tickers = await self.runner.db.get_active_tickers(self._uid)
         if not tickers:
             await update.message.reply_text(
                 "📋 Your watchlist is empty. Add tickers with /add AAPL"
@@ -117,7 +122,7 @@ class StockStalkerBot:
 
         lines = ["*Your Watchlist*", ""]
         for ticker in tickers:
-            recent = await self.runner.db.get_recent_analyses(ticker, days=1)
+            recent = await self.runner.db.get_recent_analyses(self._uid, ticker, days=1)
             if not recent:
                 lines.append(f"• {ticker}  |  no recent analysis")
                 continue
@@ -162,7 +167,7 @@ class StockStalkerBot:
             )
             return
         ticker = context.args[0].upper().strip()
-        if await self.runner.db.add_ticker(ticker):
+        if await self.runner.db.add_ticker(self._uid, ticker):
             await update.message.reply_text(
                 f"✅ Added *{ticker}* to your watchlist. Running first analysis...",
                 parse_mode="Markdown",
@@ -181,7 +186,7 @@ class StockStalkerBot:
             )
             return
         ticker = context.args[0].upper().strip()
-        await self.runner.db.deactivate_ticker(ticker)
+        await self.runner.db.deactivate_ticker(self._uid, ticker)
         await update.message.reply_text(
             f"🗑️ Removed *{ticker}* from your watchlist.", parse_mode="Markdown"
         )
@@ -224,7 +229,7 @@ class StockStalkerBot:
             parse_mode="Markdown",
         )
         try:
-            ta = await self.runner.analyze_ticker(ticker)
+            ta = await self.runner.analyze_ticker(self._uid, ticker)
         except Exception as exc:  # noqa: BLE001 — surface real failures to the user
             await update.message.reply_text(
                 f"❌ Analysis failed for {ticker}: {str(exc)[:200]}"
@@ -235,7 +240,7 @@ class StockStalkerBot:
     async def _bg_analyze(self, ticker: str) -> None:
         """Fire-and-forget analysis (used by /add); logs instead of crashing."""
         try:
-            await self.runner.analyze_ticker(ticker)
+            await self.runner.analyze_ticker(self._uid, ticker)
         except Exception as exc:  # noqa: BLE001
             logger.warning("background analysis for {} failed: {}", ticker, exc)
 
@@ -373,12 +378,12 @@ class StockStalkerBot:
 
     async def _build_summary(self) -> str:
         """One-line-per-ticker watchlist summary (shared by /summary and the daily push)."""
-        tickers = await self.runner.db.get_active_tickers()
+        tickers = await self.runner.db.get_active_tickers(self._uid)
         if not tickers:
             return "📋 Your watchlist is empty. Add a ticker with /add AAPL."
         lines = ["*📊 StockStalker Daily Summary*", ""]
         for ticker in tickers:
-            analyses = await self.runner.db.get_recent_analyses(ticker, days=1)
+            analyses = await self.runner.db.get_recent_analyses(self._uid, ticker, days=1)
             if analyses:
                 score = analyses[0].get("sentiment_score", 0.0) or 0.0
                 emoji = "🟢" if score > 0.2 else "🔴" if score < -0.2 else "⚪"
@@ -392,7 +397,7 @@ class StockStalkerBot:
 
     async def send_daily_summary(self) -> None:
         """Compose and push the daily watchlist summary to the configured chat."""
-        tickers = await self.runner.db.get_active_tickers()
+        tickers = await self.runner.db.get_active_tickers(self._uid)
         if not tickers:
             return
         await self.send_message(await self._build_summary())

@@ -71,14 +71,14 @@ class PipelineRunner:
         self.orchestrator.set_notifiers(self.alert_engine, self.bot)
         logger.info("Telegram bot enabled")
 
-    async def analyze_ticker(self, ticker: str) -> TickerAnalysis:
-        """Scrape + run the full agent pipeline for a single ticker."""
+    async def analyze_ticker(self, user_id: str, ticker: str) -> TickerAnalysis:
+        """Scrape + run the full agent pipeline for one user's ticker."""
         await self.initialize()
         ticker = ticker.upper().strip()
-        logger.info("Analyzing {}...", ticker)
+        logger.info("Analyzing {} for {}...", ticker, user_id)
 
         articles = await self.scraper.scrape_all(ticker)
-        ctx = AgentContext(ticker=ticker, articles=articles)
+        ctx = AgentContext(ticker=ticker, user_id=user_id, articles=articles)
         result = await self.orchestrator.execute(ctx)
 
         if not result.success:
@@ -86,29 +86,26 @@ class PipelineRunner:
 
         return result.data
 
-    async def analyze_all(self, tickers: list[str]) -> list[TickerAnalysis]:
-        """Analyze many tickers concurrently, capped by max_concurrent_tickers.
-
-        Each ticker is wrapped so one failure logs and yields ``None`` rather
-        than aborting the whole batch; failures are filtered from the result.
+    async def analyze_all(self, pairs: list[tuple[str, str]]) -> list[TickerAnalysis]:
+        """Analyze many (user_id, ticker) pairs concurrently, capped by
+        max_concurrent_tickers. One failure logs + yields ``None`` (filtered out)
+        rather than aborting the whole batch.
         """
         await self.initialize()
 
         sem = asyncio.Semaphore(settings.max_concurrent_tickers)
 
-        async def analyze_with_sem(ticker: str) -> TickerAnalysis | None:
+        async def analyze_with_sem(user_id: str, ticker: str) -> TickerAnalysis | None:
             async with sem:
                 try:
-                    return await self.analyze_ticker(ticker)
+                    return await self.analyze_ticker(user_id, ticker)
                 except Exception as exc:  # noqa: BLE001 — one ticker must not abort the batch
                     logger.error("Failed to analyze {}: {}", ticker, exc)
                     return None
 
-        tasks = [analyze_with_sem(t) for t in tickers]
+        tasks = [analyze_with_sem(uid, t) for uid, t in pairs]
         results = await asyncio.gather(*tasks, return_exceptions=False)
 
         successful = [r for r in results if r is not None]
-        logger.info(
-            "analyze_all complete: {}/{} succeeded", len(successful), len(tickers)
-        )
+        logger.info("analyze_all complete: {}/{} succeeded", len(successful), len(pairs))
         return successful

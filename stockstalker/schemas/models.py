@@ -92,6 +92,7 @@ class TickerAnalysis(BaseModel):
 
 class AgentContext(BaseModel):
     ticker: str
+    user_id: str = ""  # owner of this analysis (Firebase UID); "" only in legacy/tests
     articles: list[Article] = Field(default_factory=list)
     memory: MemoryContext | None = None
     extra: dict = Field(default_factory=dict)
@@ -118,6 +119,7 @@ class AlertConditionType(str, Enum):
 
 class AlertRule(BaseModel):
     id: int | None = None
+    user_id: str = ""  # owner of this rule (Firebase UID)
     ticker: str | None = None  # None means "any ticker"
     condition_type: AlertConditionType
     threshold: float | None = None  # for sentiment conditions
@@ -130,6 +132,7 @@ class AlertRule(BaseModel):
 
 class AlertEvent(BaseModel):
     rule_id: int
+    user_id: str = ""  # owner of the rule that fired (Firebase UID)
     ticker: str
     triggered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     message: str

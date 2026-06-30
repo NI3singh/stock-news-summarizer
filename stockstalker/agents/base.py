@@ -67,6 +67,7 @@ class BaseAgent(ABC):
         )
 
         await self.db.log_agent_run(
+            user_id=context.user_id,
             ticker=context.ticker,
             agent_name=self.name,
             duration=duration,

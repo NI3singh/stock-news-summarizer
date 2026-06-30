@@ -20,7 +20,7 @@ def _runner(tickers, analyses_by_ticker=None, vector_size=0):
     db = SimpleNamespace()
     db.get_active_tickers = AsyncMock(return_value=tickers)
     if analyses_by_ticker is not None:
-        def _gra(ticker, days=1):
+        def _gra(user_id, ticker, days=1):
             return analyses_by_ticker.get(ticker, [])
         db.get_recent_analyses = AsyncMock(side_effect=_gra)
     else:

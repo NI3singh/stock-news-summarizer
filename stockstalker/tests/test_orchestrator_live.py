@@ -11,6 +11,7 @@ import aiosqlite
 import pytest
 
 from stockstalker.agents import OrchestratorAgent
+from stockstalker.config.settings import DEV_UID
 from stockstalker.llm import GeminiClient
 from stockstalker.memory import DatabaseManager, VectorStore
 from stockstalker.scrapers import ScraperOrchestrator
@@ -34,7 +35,7 @@ async def test_full_orchestrator_pipeline():
 
     # Step 2 — run orchestrator
     start = time.time()
-    ctx = AgentContext(ticker="AAPL", articles=articles)
+    ctx = AgentContext(ticker="AAPL", user_id=DEV_UID, articles=articles)
     result = await agent.execute(ctx)
     elapsed = time.time() - start
     print(f"Orchestrator completed in {elapsed:.1f}s")
@@ -51,7 +52,7 @@ async def test_full_orchestrator_pipeline():
     print(f"Synthesis: {ta.final_synthesis[:200]}")
 
     # Step 4 — DB persistence
-    analyses = await db.get_recent_analyses("AAPL", days=1)
+    analyses = await db.get_recent_analyses(DEV_UID, "AAPL", days=1)
     assert len(analyses) >= 1, "Analysis should have been saved to DB"
     print(f"DB analyses count: {len(analyses)}")
 

@@ -24,9 +24,11 @@ class AlertEngine:
     def __init__(self, db: DatabaseManager) -> None:
         self.db = db
 
-    async def evaluate(self, ticker: str, analysis: TickerAnalysis) -> list[str]:
-        """Return the alert messages triggered by ``analysis`` (empty if none)."""
-        rules = await self.db.get_active_alert_rules()
+    async def evaluate(
+        self, user_id: str, ticker: str, analysis: TickerAnalysis
+    ) -> list[str]:
+        """Return the alert messages triggered by ``analysis`` for one user (empty if none)."""
+        rules = await self.db.get_active_alert_rules(user_id)
         messages: list[str] = []
         sentiment = analysis.news.sentiment_score
 
@@ -79,6 +81,7 @@ class AlertEngine:
                 await self.db.log_alert_event(
                     AlertEvent(
                         rule_id=rule.id,
+                        user_id=user_id,
                         ticker=ticker,
                         message=triggered_message,
                         delivered=False,

@@ -37,22 +37,22 @@ class DailyScheduler:
     async def _job(self) -> None:
         """Daily refresh — runs on the event loop, so it just awaits the pipeline."""
         try:
-            tickers = await self.runner.db.get_active_tickers()
-            if not tickers:
+            pairs = await self.runner.db.get_all_active_tickers()
+            if not pairs:
                 logger.warning("[scheduler] No active tickers — skipping refresh")
                 return
             logger.info(
-                "[scheduler] Starting daily refresh for {} tickers: {}",
-                len(tickers),
-                tickers,
+                "[scheduler] Starting daily refresh for {} tickers across {} users",
+                len(pairs),
+                len({uid for uid, _ in pairs}),
             )
             start = time.time()
-            results = await self.runner.analyze_all(tickers)
+            results = await self.runner.analyze_all(pairs)
             elapsed = time.time() - start
             logger.info(
                 "[scheduler] Daily refresh complete: {}/{} succeeded in {:.1f}s",
                 len(results),
-                len(tickers),
+                len(pairs),
                 elapsed,
             )
         except Exception as exc:  # noqa: BLE001 — a job error must not kill the scheduler

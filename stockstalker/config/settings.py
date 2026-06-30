@@ -25,6 +25,9 @@ _ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 # environment variables are used.
 load_dotenv(_ENV_PATH, override=True)
 
+# Shared user id used when Firebase auth is NOT configured (offline / local dev).
+DEV_UID = "local-dev"
+
 
 class Settings(BaseSettings):
     # Required secrets. Defaulted to "" (rather than left as bare required
@@ -84,6 +87,16 @@ class Settings(BaseSettings):
     # `main.py mcp-server` / `run-scheduler --with-mcp`.
     enable_mcp: bool = True
 
+    # --- Multi-tenancy / auth ---
+    # Firebase project id used to VERIFY incoming Firebase ID tokens. When SET, the
+    # API requires a valid `Authorization: Bearer <token>` and scopes every query by
+    # the caller's UID. When UNSET (local dev, no Firebase), verification is skipped
+    # and a single shared "local-dev" user is used so the app still works offline.
+    firebase_project_id: str | None = None
+    # The Telegram bot + MCP server act on THIS user's watchlist (the deployer's).
+    # Set it to your Firebase UID — call GET /api/auth/me while logged in to find it.
+    owner_uid: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=str(_ENV_PATH),
         case_sensitive=False,
@@ -122,6 +135,12 @@ class Settings(BaseSettings):
         if "?" in raw:
             raw = raw.split("?", 1)[0]
         return raw
+
+    @property
+    def effective_owner_uid(self) -> str:
+        """The user the Telegram bot + MCP server act as: the configured OWNER_UID,
+        or the shared dev user when running without Firebase."""
+        return self.owner_uid or DEV_UID
 
 
 # Singleton — instantiating here validates configuration at import time (fail-fast).

@@ -16,6 +16,7 @@ from stockstalker.agents.base import BaseAgent
 from stockstalker.agents.memory_agent import MemoryAgent
 from stockstalker.agents.news_agent import NewsAgent
 from stockstalker.agents.quant_agent import QuantAgent
+from stockstalker.config import settings
 from stockstalker.llm.client import LLMError
 from stockstalker.llm.prompts import synthesis_prompt
 from stockstalker.schemas import (
@@ -129,7 +130,7 @@ class OrchestratorAgent(BaseAgent):
 
             # --- Step D: Persist (indexing articles closes the RAG loop) ---
             logger.info("[{}] Step D: Persisting results", self.name)
-            await self.db.save_analysis(context.ticker, ticker_analysis)
+            await self.db.save_analysis(context.user_id, context.ticker, ticker_analysis)
             # Vector indexing is best-effort: embeddings need the LLM provider, so a
             # provider outage must not fail an already-saved analysis.
             try:
@@ -147,14 +148,18 @@ class OrchestratorAgent(BaseAgent):
                 )
 
             # --- Step E: Fire alerts (best-effort; never fails a saved analysis) ---
-            if self.alert_engine and self.bot:
+            # Rules + events are per-user. Telegram delivery only happens for the
+            # OWNER's analyses (the deployer linked to TELEGRAM_CHAT_ID); other users'
+            # alerts are still recorded as events, visible in their web Alerts page.
+            if self.alert_engine:
                 try:
                     alert_messages = await self.alert_engine.evaluate(
-                        context.ticker, ticker_analysis
+                        context.user_id, context.ticker, ticker_analysis
                     )
-                    for message in alert_messages:
-                        await self.bot.send_message(message)
-                        logger.info("[{}] Alert sent for {}", self.name, context.ticker)
+                    if self.bot and context.user_id == settings.effective_owner_uid:
+                        for message in alert_messages:
+                            await self.bot.send_message(message)
+                            logger.info("[{}] Alert sent for {}", self.name, context.ticker)
                 except Exception as exc:  # noqa: BLE001 — alerting must not fail the analysis
                     logger.warning("[{}] alert delivery failed: {}", self.name, exc)
 

@@ -12,6 +12,7 @@ import time
 
 import pytest
 
+from stockstalker.config.settings import DEV_UID
 from stockstalker.pipeline import PipelineRunner
 
 try:
@@ -32,14 +33,14 @@ async def test_multi_ticker_concurrent():
     start_times: dict[str, float] = {}
     original_analyze = runner.analyze_ticker
 
-    async def tracked_analyze(ticker):
+    async def tracked_analyze(user_id, ticker):
         start_times[ticker] = time.time()
-        return await original_analyze(ticker)
+        return await original_analyze(user_id, ticker)
 
     runner.analyze_ticker = tracked_analyze
 
     start = time.time()
-    results = await runner.analyze_all(tickers)
+    results = await runner.analyze_all([(DEV_UID, t) for t in tickers])
     elapsed = time.time() - start
 
     # --- Basic assertions ---

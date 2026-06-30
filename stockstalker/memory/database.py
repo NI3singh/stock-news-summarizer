@@ -28,7 +28,6 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -62,7 +61,10 @@ tickers_t = Table(
     "tickers",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("symbol", String, unique=True, nullable=False),
+    Column("user_id", String, nullable=False, default=""),
+    # NOT globally unique anymore — uniqueness is per (user_id, symbol), enforced
+    # in add_ticker() so two different users can each track the same ticker.
+    Column("symbol", String, nullable=False),
     Column("added_at", String, default=_now_iso),
     Column("is_active", Integer, default=1),
 )
@@ -85,6 +87,7 @@ analyses_t = Table(
     "analyses",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", String, nullable=False, default=""),
     Column("ticker", String, nullable=False),
     Column("analyzed_at", String, nullable=False),
     Column("news_summary", Text),
@@ -104,6 +107,7 @@ agent_runs_t = Table(
     "agent_runs",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", String, nullable=False, default=""),
     Column("ticker", String, nullable=False),
     Column("agent_name", String, nullable=False),
     Column("started_at", String, default=_now_iso),
@@ -116,6 +120,7 @@ alert_rules_t = Table(
     "alert_rules",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", String, nullable=False, default=""),
     Column("ticker", String),
     Column("condition_type", String, nullable=False),
     Column("threshold", Float),
@@ -129,6 +134,7 @@ alert_events_t = Table(
     "alert_events",
     metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", String, nullable=False, default=""),
     Column("rule_id", Integer, nullable=False),
     Column("ticker", String, nullable=False),
     Column("triggered_at", String, default=_now_iso),
@@ -142,6 +148,17 @@ alert_events_t = Table(
 _MIGRATIONS = [
     "ALTER TABLE analyses ADD COLUMN composite_sentiment FLOAT",
     "ALTER TABLE analyses ADD COLUMN market_data TEXT",
+    # Multi-tenancy: add user_id to the per-user tables (idempotent). Pre-existing
+    # rows default to '' (unowned) — users start with a fresh, private watchlist.
+    "ALTER TABLE tickers ADD COLUMN user_id VARCHAR DEFAULT ''",
+    "ALTER TABLE analyses ADD COLUMN user_id VARCHAR DEFAULT ''",
+    "ALTER TABLE agent_runs ADD COLUMN user_id VARCHAR DEFAULT ''",
+    "ALTER TABLE alert_rules ADD COLUMN user_id VARCHAR DEFAULT ''",
+    "ALTER TABLE alert_events ADD COLUMN user_id VARCHAR DEFAULT ''",
+    # The old global UNIQUE(symbol) blocks two users tracking the same ticker; drop
+    # it (Postgres auto-named it tickers_symbol_key). Uniqueness is now (user_id,
+    # symbol), enforced in add_ticker(). No-op on SQLite (caught + ignored).
+    "ALTER TABLE tickers DROP CONSTRAINT IF EXISTS tickers_symbol_key",
 ]
 
 
@@ -216,36 +233,65 @@ class DatabaseManager:
                 pass
         logger.debug("Database initialised ({})", self.db_url.split("@")[-1])
 
-    async def add_ticker(self, symbol: str) -> bool:
-        """Insert a ticker. Returns False if it already exists."""
-        try:
-            async with self._engine.begin() as conn:
-                await conn.execute(insert(tickers_t).values(symbol=symbol))
-        except IntegrityError:
-            logger.debug("Ticker {} already exists", symbol)
-            return False
-        logger.debug("Ticker {} added", symbol)
+    async def add_ticker(self, user_id: str, symbol: str) -> bool:
+        """Add a ticker to a user's watchlist. Returns False if they already track it
+        (active); reactivates a previously-removed one instead of duplicating."""
+        async with self._engine.begin() as conn:
+            row = (
+                await conn.execute(
+                    select(tickers_t.c.id, tickers_t.c.is_active).where(
+                        tickers_t.c.user_id == user_id,
+                        tickers_t.c.symbol == symbol,
+                    )
+                )
+            ).first()
+            if row is not None:
+                if row.is_active == 1:
+                    logger.debug("Ticker {} already tracked by {}", symbol, user_id)
+                    return False
+                await conn.execute(
+                    update(tickers_t).where(tickers_t.c.id == row.id).values(is_active=1)
+                )
+                logger.debug("Ticker {} reactivated for {}", symbol, user_id)
+                return True
+            await conn.execute(insert(tickers_t).values(user_id=user_id, symbol=symbol))
+        logger.debug("Ticker {} added for {}", symbol, user_id)
         return True
 
-    async def get_active_tickers(self) -> list[str]:
-        """Return all active ticker symbols, oldest first."""
+    async def get_active_tickers(self, user_id: str) -> list[str]:
+        """Return a user's active ticker symbols, oldest first."""
         async with self._engine.connect() as conn:
             rows = (
                 await conn.execute(
                     select(tickers_t.c.symbol)
-                    .where(tickers_t.c.is_active == 1)
+                    .where(tickers_t.c.user_id == user_id, tickers_t.c.is_active == 1)
                     .order_by(tickers_t.c.id)
                 )
             ).all()
         return [r[0] for r in rows]
 
-    async def deactivate_ticker(self, symbol: str) -> None:
-        """Soft-delete a ticker (set is_active = 0)."""
+    async def get_all_active_tickers(self) -> list[tuple[str, str]]:
+        """Return (user_id, symbol) for EVERY active ticker across all users — used by
+        the scheduler to refresh everyone's watchlist."""
+        async with self._engine.connect() as conn:
+            rows = (
+                await conn.execute(
+                    select(tickers_t.c.user_id, tickers_t.c.symbol)
+                    .where(tickers_t.c.is_active == 1)
+                    .order_by(tickers_t.c.id)
+                )
+            ).all()
+        return [(r[0], r[1]) for r in rows]
+
+    async def deactivate_ticker(self, user_id: str, symbol: str) -> None:
+        """Soft-delete a ticker from a user's watchlist (set is_active = 0)."""
         async with self._engine.begin() as conn:
             await conn.execute(
-                update(tickers_t).where(tickers_t.c.symbol == symbol).values(is_active=0)
+                update(tickers_t)
+                .where(tickers_t.c.user_id == user_id, tickers_t.c.symbol == symbol)
+                .values(is_active=0)
             )
-        logger.debug("Ticker {} deactivated", symbol)
+        logger.debug("Ticker {} deactivated for {}", symbol, user_id)
 
     async def save_article(self, article: Article) -> None:
         """Persist a single scraped article."""
@@ -262,8 +308,8 @@ class DatabaseManager:
                 )
             )
 
-    async def save_analysis(self, ticker: str, analysis: TickerAnalysis) -> None:
-        """Persist a full TickerAnalysis, serialising sub-objects to JSON strings."""
+    async def save_analysis(self, user_id: str, ticker: str, analysis: TickerAnalysis) -> None:
+        """Persist a full TickerAnalysis for a user, serialising sub-objects to JSON."""
         articles_used = json.dumps(
             [a.model_dump(mode="json") for a in analysis.news.selected_articles]
         )
@@ -283,6 +329,7 @@ class DatabaseManager:
         async with self._engine.begin() as conn:
             await conn.execute(
                 insert(analyses_t).values(
+                    user_id=user_id,
                     ticker=ticker,
                     analyzed_at=_to_naive_iso(analysis.analyzed_at),
                     news_summary=analysis.news.summary,
@@ -300,8 +347,8 @@ class DatabaseManager:
             )
         logger.debug("Analysis saved for {}", ticker)
 
-    async def get_all_analyses(self, ticker: str) -> list[dict]:
-        """Return ALL analyses for a ticker, oldest first (for ML/training tooling)."""
+    async def get_all_analyses(self, user_id: str, ticker: str) -> list[dict]:
+        """Return ALL of a user's analyses for a ticker, oldest first."""
         async with self._engine.connect() as conn:
             rows = (
                 await conn.execute(
@@ -313,20 +360,21 @@ class DatabaseManager:
                         analyses_t.c.quant_interpretation,
                         analyses_t.c.final_synthesis,
                     )
-                    .where(analyses_t.c.ticker == ticker)
+                    .where(analyses_t.c.user_id == user_id, analyses_t.c.ticker == ticker)
                     .order_by(analyses_t.c.analyzed_at.asc())
                 )
             ).mappings().all()
         return [dict(r) for r in rows]
 
-    async def get_recent_analyses(self, ticker: str, days: int = 7) -> list[dict]:
-        """Return analyses for a ticker within the last ``days``, newest first."""
+    async def get_recent_analyses(self, user_id: str, ticker: str, days: int = 7) -> list[dict]:
+        """Return a user's analyses for a ticker within the last ``days``, newest first."""
         cutoff = (_utcnow_naive() - timedelta(days=days)).isoformat()
         async with self._engine.connect() as conn:
             rows = (
                 await conn.execute(
                     select(analyses_t)
                     .where(
+                        analyses_t.c.user_id == user_id,
                         analyses_t.c.ticker == ticker,
                         analyses_t.c.analyzed_at >= cutoff,
                     )
@@ -349,6 +397,7 @@ class DatabaseManager:
 
     async def log_agent_run(
         self,
+        user_id: str,
         ticker: str,
         agent_name: str,
         duration: float,
@@ -359,6 +408,7 @@ class DatabaseManager:
         async with self._engine.begin() as conn:
             await conn.execute(
                 insert(agent_runs_t).values(
+                    user_id=user_id,
                     ticker=ticker,
                     agent_name=agent_name,
                     duration_seconds=duration,
@@ -374,12 +424,15 @@ class DatabaseManager:
             success,
         )
 
-    async def get_agent_runs(self, limit: int = 50) -> list[dict]:
-        """Return the most recent agent runs (newest first) — for the dashboard."""
+    async def get_agent_runs(self, user_id: str, limit: int = 50) -> list[dict]:
+        """Return a user's most recent agent runs (newest first) — for the dashboard."""
         async with self._engine.connect() as conn:
             rows = (
                 await conn.execute(
-                    select(agent_runs_t).order_by(agent_runs_t.c.id.desc()).limit(limit)
+                    select(agent_runs_t)
+                    .where(agent_runs_t.c.user_id == user_id)
+                    .order_by(agent_runs_t.c.id.desc())
+                    .limit(limit)
                 )
             ).mappings().all()
         return [dict(r) for r in rows]
@@ -391,6 +444,7 @@ class DatabaseManager:
         async with self._engine.begin() as conn:
             result = await conn.execute(
                 insert(alert_rules_t).values(
+                    user_id=rule.user_id,
                     ticker=rule.ticker,
                     condition_type=rule.condition_type.value,
                     threshold=rule.threshold,
@@ -405,13 +459,16 @@ class DatabaseManager:
         logger.debug("alert_rule added: id={} ({})", new_id, rule.condition_type.value)
         return new_id
 
-    async def get_active_alert_rules(self) -> list[AlertRule]:
-        """Return all active alert rules as AlertRule objects."""
+    async def get_active_alert_rules(self, user_id: str) -> list[AlertRule]:
+        """Return a user's active alert rules as AlertRule objects."""
         async with self._engine.connect() as conn:
             rows = (
                 await conn.execute(
                     select(alert_rules_t)
-                    .where(alert_rules_t.c.is_active == 1)
+                    .where(
+                        alert_rules_t.c.is_active == 1,
+                        alert_rules_t.c.user_id == user_id,
+                    )
                     .order_by(alert_rules_t.c.id)
                 )
             ).mappings().all()
@@ -426,39 +483,48 @@ class DatabaseManager:
                 .values(last_triggered_at=_now_iso())
             )
 
-    async def delete_alert_rule(self, rule_id: int) -> None:
-        """Permanently delete an alert rule (hard delete). Disabling without
-        deleting is a separate action — see set_alert_rule_active()."""
+    async def delete_alert_rule(self, user_id: str, rule_id: int) -> None:
+        """Permanently delete one of a user's alert rules (hard delete). Disabling
+        without deleting is a separate action — see set_alert_rule_active()."""
         async with self._engine.begin() as conn:
             await conn.execute(
-                delete(alert_rules_t).where(alert_rules_t.c.id == rule_id)
+                delete(alert_rules_t).where(
+                    alert_rules_t.c.id == rule_id,
+                    alert_rules_t.c.user_id == user_id,
+                )
             )
 
-    async def get_all_alert_rules(self) -> list[AlertRule]:
-        """Return ALL alert rules (active + inactive), newest first — for the manager UI."""
+    async def get_all_alert_rules(self, user_id: str) -> list[AlertRule]:
+        """Return ALL of a user's alert rules (active + inactive), newest first."""
         async with self._engine.connect() as conn:
             rows = (
                 await conn.execute(
-                    select(alert_rules_t).order_by(alert_rules_t.c.id.desc())
+                    select(alert_rules_t)
+                    .where(alert_rules_t.c.user_id == user_id)
+                    .order_by(alert_rules_t.c.id.desc())
                 )
             ).mappings().all()
         return [AlertRule(**dict(r)) for r in rows]
 
-    async def set_alert_rule_active(self, rule_id: int, active: bool) -> None:
-        """Activate / pause an alert rule (toggle is_active)."""
+    async def set_alert_rule_active(self, user_id: str, rule_id: int, active: bool) -> None:
+        """Activate / pause one of a user's alert rules (toggle is_active)."""
         async with self._engine.begin() as conn:
             await conn.execute(
                 update(alert_rules_t)
-                .where(alert_rules_t.c.id == rule_id)
+                .where(
+                    alert_rules_t.c.id == rule_id,
+                    alert_rules_t.c.user_id == user_id,
+                )
                 .values(is_active=int(active))
             )
 
-    async def get_recent_alert_events(self, limit: int = 20) -> list[dict]:
-        """Return the most recently triggered alert events (newest first)."""
+    async def get_recent_alert_events(self, user_id: str, limit: int = 20) -> list[dict]:
+        """Return a user's most recently triggered alert events (newest first)."""
         async with self._engine.connect() as conn:
             rows = (
                 await conn.execute(
                     select(alert_events_t)
+                    .where(alert_events_t.c.user_id == user_id)
                     .order_by(alert_events_t.c.triggered_at.desc())
                     .limit(limit)
                 )
@@ -470,6 +536,7 @@ class DatabaseManager:
         async with self._engine.begin() as conn:
             await conn.execute(
                 insert(alert_events_t).values(
+                    user_id=event.user_id,
                     rule_id=event.rule_id,
                     ticker=event.ticker,
                     message=event.message,

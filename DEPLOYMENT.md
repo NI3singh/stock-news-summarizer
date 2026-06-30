@@ -42,6 +42,8 @@ New + → **Web Service** → connect repo → branch.
 | `DATABASE_URL` | the Supabase pooler URI |
 | `FRONTEND_ORIGIN` | `https://stockstalker-frontend.onrender.com` (your frontend URL) |
 | `PYTHON_VERSION` | `3.12` |
+| `FIREBASE_PROJECT_ID` | **recommended** — enables per-user accounts (verifies the Firebase ID token & scopes each user's data by UID). Must match the frontend's `NEXT_PUBLIC_FIREBASE_PROJECT_ID`. **Unset = one shared user.** |
+| `OWNER_UID` | *(optional — the Firebase UID the Telegram bot + MCP act for; copy from `GET /api/auth/me` while signed in)* |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | *(optional — for the bot + alerts)* |
 | `ENABLE_BACKGROUND_JOBS` | *(optional — `true` runs the bot + scheduler in this service; see Telegram section)* |
 
@@ -151,6 +153,8 @@ Set `ENABLE_MCP=false` to turn it off, or run it standalone instead via
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | – | optional bot + alerts |
 | `ENABLE_BACKGROUND_JOBS` | – | `true` = run bot poller + scheduler in the API process (single-service). Don't also run the worker. |
 | `ENABLE_MCP` | – | mount the MCP server at `/mcp` on the API (default `true`); `false` to disable |
+| `FIREBASE_PROJECT_ID` | rec | per-user data isolation: the API verifies Firebase ID tokens and scopes watchlist/analyses/alerts by UID. **Unset = single shared "dev" user (no token required).** Must equal `NEXT_PUBLIC_FIREBASE_PROJECT_ID`. |
+| `OWNER_UID` | – | Firebase UID the single-user background services (Telegram bot, MCP) act for; copy from `GET /api/auth/me`. Falls back to the dev user if unset. |
 
 **Frontend**
 
@@ -181,6 +185,7 @@ services:
       - { key: POLYGON_API_KEY, sync: false }
       - { key: DATABASE_URL, sync: false }
       - { key: FRONTEND_ORIGIN, sync: false }
+      - { key: FIREBASE_PROJECT_ID, sync: false }
 
   - type: web
     name: stockstalker-frontend
@@ -204,7 +209,9 @@ services:
 
 ## Troubleshooting
 
-- **Deployed app shows no tickers / history.** Data lives in the database, and the watchlist is **shared (not per-user)** — logging in with the same email doesn't carry data over. The backend's `DATABASE_URL` must point at your Supabase; if it's unset the app silently falls back to an **ephemeral SQLite file inside the container** (empty, and wiped on every redeploy). Set `DATABASE_URL` on the backend to the **same** Supabase URL you use locally, then redeploy.
+- **Deployed app shows no tickers / history.** Two independent causes:
+  1. **`DATABASE_URL` not set on the backend** → it silently falls back to an **ephemeral SQLite file inside the container** (empty, and wiped on every redeploy). Point it at the **same** Supabase URL you use locally, then redeploy.
+  2. **`FIREBASE_PROJECT_ID` not set on the backend** → the API can't verify your login token, so every request is attributed to one shared **"dev" user** rather than your account (this is why a Swagger `GET /api/tickers` returns a list without asking you to log in). Set `FIREBASE_PROJECT_ID` to the same project as the frontend's `NEXT_PUBLIC_FIREBASE_PROJECT_ID` and redeploy — then each signed-in user gets their own isolated watchlist/history/alerts, and the same email always maps to the same data.
 - **Telegram `Conflict: terminated by other getUpdates request`.** The bot token is being polled in **two places at once** (Telegram allows only one poller per token). Keep `ENABLE_BACKGROUND_JOBS=true` on exactly **one** instance — your deploy — and set it to **false** everywhere else (e.g. your local `.env`), or stop the other instance.
 
 ## Notes

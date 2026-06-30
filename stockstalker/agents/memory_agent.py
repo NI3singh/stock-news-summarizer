@@ -22,7 +22,7 @@ class MemoryAgent(BaseAgent):
                 ticker=context.ticker,
                 n=5,
             ),
-            self.db.get_recent_analyses(context.ticker, days=7),
+            self.db.get_recent_analyses(context.user_id, context.ticker, days=7),
         )
 
         if not recent_analyses:

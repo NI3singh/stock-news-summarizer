@@ -86,7 +86,7 @@ async def get_stock_analysis(ticker: str) -> dict:
     runner = get_runner()
     ticker = ticker.upper().strip()
 
-    analyses = await runner.db.get_recent_analyses(ticker, days=1)
+    analyses = await runner.db.get_recent_analyses(settings.effective_owner_uid, ticker, days=1)
     if not analyses:
         return {
             "error": f"No recent analysis found for {ticker}",
@@ -143,7 +143,7 @@ async def run_stock_analysis(ticker: str) -> dict:
     logger.info("[MCP] run_stock_analysis called for {}", ticker)
 
     try:
-        ta = await runner.analyze_ticker(ticker)
+        ta = await runner.analyze_ticker(settings.effective_owner_uid, ticker)
         score = ta.news.sentiment_score
         return {
             "ticker": ta.ticker,
@@ -185,13 +185,13 @@ async def get_watchlist() -> dict:
         dict with the list of tickers and their status.
     """
     runner = get_runner()
-    tickers = await runner.db.get_active_tickers()
+    tickers = await runner.db.get_active_tickers(settings.effective_owner_uid)
     if not tickers:
         return {"tickers": [], "count": 0, "message": "Watchlist is empty"}
 
     result = []
     for ticker in tickers:
-        analyses = await runner.db.get_recent_analyses(ticker, days=1)
+        analyses = await runner.db.get_recent_analyses(settings.effective_owner_uid, ticker, days=1)
         if analyses:
             latest = analyses[0]
             score = latest.get("sentiment_score", None)
@@ -245,7 +245,7 @@ async def compare_tickers(tickers: list[str]) -> dict:
     comparison: dict = {}
     for ticker in tickers:
         ticker = ticker.upper().strip()
-        analyses = await runner.db.get_recent_analyses(ticker, days=1)
+        analyses = await runner.db.get_recent_analyses(settings.effective_owner_uid, ticker, days=1)
         if analyses:
             latest = analyses[0]
             score = latest.get("sentiment_score", 0.0) or 0.0
@@ -284,11 +284,11 @@ async def get_system_status() -> dict:
         System health dict.
     """
     runner = get_runner()
-    tickers = await runner.db.get_active_tickers()
+    tickers = await runner.db.get_active_tickers(settings.effective_owner_uid)
 
     total_analyses = 0
     for ticker in tickers:
-        analyses = await runner.db.get_recent_analyses(ticker, days=30)
+        analyses = await runner.db.get_recent_analyses(settings.effective_owner_uid, ticker, days=30)
         total_analyses += len(analyses)
 
     return {

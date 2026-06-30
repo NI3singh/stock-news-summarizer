@@ -74,13 +74,17 @@ async def test_database_tables(tmp_path):
 
 async def test_ticker_crud(tmp_path):
     """Test 4 — add / list / deactivate ticker lifecycle."""
+    uid = "user-1"
     db = DatabaseManager(db_path=str(tmp_path / "test.db"))
     await db.init_db()
-    assert await db.add_ticker("AAPL") is True
-    assert await db.add_ticker("AAPL") is False  # duplicate
-    assert "AAPL" in await db.get_active_tickers()
-    await db.deactivate_ticker("AAPL")
-    assert "AAPL" not in await db.get_active_tickers()
+    assert await db.add_ticker(uid, "AAPL") is True
+    assert await db.add_ticker(uid, "AAPL") is False  # duplicate for this user
+    assert "AAPL" in await db.get_active_tickers(uid)
+    # multi-tenancy: a different user can track the same ticker independently
+    assert await db.add_ticker("user-2", "AAPL") is True
+    await db.deactivate_ticker(uid, "AAPL")
+    assert "AAPL" not in await db.get_active_tickers(uid)
+    assert "AAPL" in await db.get_active_tickers("user-2")  # unaffected
 
 
 async def test_vectorstore_init(tmp_path, monkeypatch):

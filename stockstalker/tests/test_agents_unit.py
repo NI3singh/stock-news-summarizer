@@ -125,8 +125,11 @@ async def test_quant_agent_returns_quant_analysis(mocks, mocker):
 
 # --- Base Agent ---
 async def test_execute_populates_duration(mocks):
+    import asyncio
+
     class _OkAgent(BaseAgent):
         async def run(self, context):
+            await asyncio.sleep(0.01)  # ensure a measurable, non-zero duration
             return AgentResult(agent_name="test", success=True)
 
     agent = _OkAgent("test", mocks.llm, mocks.db, mocks.vs)
