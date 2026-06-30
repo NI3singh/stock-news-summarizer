@@ -10,7 +10,9 @@ import type {
   TickersResponse,
 } from "@/lib/types";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Strip any trailing slash(es) so `${BASE}/api/...` never becomes `//api/...`
+// (which 404s) when NEXT_PUBLIC_API_URL is set with a trailing slash.
+const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 
 export const api = {
   getTickers: (): Promise<TickersResponse> =>
