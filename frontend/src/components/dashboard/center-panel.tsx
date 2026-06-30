@@ -8,6 +8,8 @@ import { WhatChangedBox } from "@/components/dashboard/what-changed-box";
 import { SourceArticles } from "@/components/dashboard/source-articles";
 import { HistoryAccordion } from "@/components/dashboard/history-accordion";
 import { KeyThemes } from "@/components/dashboard/key-themes";
+import { MarketDataCard } from "@/components/dashboard/market-data-card";
+import { AnalysisInProgress } from "@/components/dashboard/analysis-in-progress";
 import { QuantSignals } from "@/components/dashboard/quant-signals";
 import { useRefreshTicker } from "@/hooks/use-refresh";
 import { useDashboardStore } from "@/stores/dashboard-store";
@@ -57,26 +59,51 @@ export function CenterPanel({
             {ticker}
           </Link>
           <p className="mt-0.5 text-sm text-qm-text3">
-            {latest ? `Analyzed: ${fmtDateTime(latest.analyzed_at)}` : "Not analyzed yet"}
+            {latest
+              ? `Analyzed: ${fmtDateTime(latest.analyzed_at)}`
+              : processing
+                ? "Analysis in progress…"
+                : "Not analyzed yet"}
           </p>
         </div>
         {refreshButton}
       </div>
 
       {!latest ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-qm-border py-20 text-center">
-          <p className="text-qm-text2">
-            No analysis yet for <span className="font-semibold text-qm-text">{ticker}</span>.
-          </p>
-          <p className="mt-1 text-sm text-qm-text3">Click Refresh to generate one (~15s).</p>
-          <div className="mt-4">{refreshButton}</div>
-        </div>
+        processing ? (
+          <AnalysisInProgress key={ticker} ticker={ticker} />
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-qm-border py-20 text-center">
+            <p className="text-qm-text2">
+              No analysis yet for <span className="font-semibold text-qm-text">{ticker}</span>.
+            </p>
+            <p className="mt-1 text-sm text-qm-text3">Click Refresh to generate one (~15s).</p>
+            <div className="mt-4">{refreshButton}</div>
+          </div>
+        )
       ) : (
         <div className="space-y-5">
-          {/* Sentiment gauge */}
-          <div className="qm-elevate bg-green-glow relative flex justify-center overflow-hidden rounded-xl border border-qm-border bg-qm-card py-8">
+          {/* Sentiment gauge + credibility-weighted composite */}
+          <div className="qm-elevate bg-green-glow relative flex flex-col items-center gap-2 overflow-hidden rounded-xl border border-qm-border bg-qm-card py-8">
             <SentimentGauge score={latest.sentiment_score ?? 0} size="lg" />
+            {latest.composite_sentiment != null && (
+              <div className="text-xs text-qm-text3">
+                Credibility-weighted composite:{" "}
+                <span
+                  className={cn(
+                    "font-semibold tabular-nums",
+                    latest.composite_sentiment >= 0 ? "text-qm-green" : "text-qm-red",
+                  )}
+                >
+                  {latest.composite_sentiment >= 0 ? "+" : ""}
+                  {latest.composite_sentiment.toFixed(2)}
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* Market data (yfinance fundamentals) */}
+          <MarketDataCard data={latest.market_data} />
 
           {/* Key themes */}
           {latest.key_themes && latest.key_themes.length > 0 && (

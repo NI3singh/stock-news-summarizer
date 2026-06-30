@@ -1,8 +1,8 @@
 """StockStalker v2 — Memory Agent.
 
 The only agent that never calls the LLM — pure data retrieval. It fetches
-semantically-similar past events from ChromaDB and recent analyses from SQLite
-(concurrently) and assembles a MemoryContext that flows into every later agent.
+semantically-similar past events from the vector store and recent analyses from
+SQL (concurrently) and assembles a MemoryContext that flows into every later agent.
 """
 import asyncio
 
@@ -15,7 +15,7 @@ class MemoryAgent(BaseAgent):
     async def run(self, context: AgentContext) -> AgentResult:
         logger.info("[{}] Fetching history for {}", self.name, context.ticker)
 
-        # Vector search (ChromaDB) and recent analyses (SQLite) run concurrently.
+        # Vector search and recent analyses (SQL) run concurrently.
         similar_events, recent_analyses = await asyncio.gather(
             self.vector_store.search_similar(
                 query=f"{context.ticker} stock news analysis financial",

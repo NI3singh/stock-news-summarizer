@@ -2,16 +2,16 @@
 
 Exposes the CLI pipeline over HTTP so the Next.js frontend can drive it. A single
 long-lived ``PipelineRunner`` is created once in the lifespan handler and reused
-for every request (heavy resources — Chroma, LangChain, scrapers — built once).
+for every request (heavy resources — vector store, LangChain, scrapers — built once).
 
 Run with:  ``python stockstalker/main.py api``  (or ``stockstalker api``) → port 8000.
 """
 import asyncio
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from threading import Lock
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ValidationError
@@ -21,34 +21,85 @@ from stockstalker.utils import logger
 
 # --- Shared state ---
 _runner = None
+_scheduler = None  # DailyScheduler instance when ENABLE_BACKGROUND_JOBS runs jobs in-process
 _jobs: dict = {}
 _jobs_lock = Lock()
+
+# Optionally mount the MCP server (Phase C) onto THIS API so a single service also
+# serves MCP at /mcp — no separate process or port. Stateless transport so it
+# composes with the API's own lifespan. Guarded: any failure disables /mcp but
+# never blocks the API. Built once here; its lifespan is run + it's mounted below.
+_mcp_app = None
+if settings.enable_mcp:
+    try:
+        from stockstalker.integrations.mcp_server import mcp as _mcp_instance
+
+        _mcp_app = _mcp_instance.http_app(path="/mcp", stateless_http=True)
+    except Exception as exc:  # noqa: BLE001 — never let MCP setup crash the API
+        logger.warning("MCP mount unavailable ({}); /mcp disabled.", exc)
+        _mcp_app = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _runner
+    global _runner, _scheduler
     from stockstalker.pipeline import PipelineRunner
 
     _runner = PipelineRunner()
     await _runner.initialize()
-    # ML (prediction + entity extraction) is auto-enabled inside the
-    # OrchestratorAgent constructor, so there is no separate enable step.
-    # Enable Telegram if creds are set (no-op otherwise) + initialize the bot's
-    # HTTP client so /api/alerts/test can send. Guarded so a bad/unreachable
-    # token can't crash API startup.
+
+    # Enable Telegram if creds are set (no-op otherwise). Guarded so a bad or
+    # unreachable token can't crash API startup.
     _runner.enable_telegram()
     if _runner.bot is not None:
         try:
-            await _runner.bot.app.initialize()
+            if settings.enable_background_jobs:
+                # Single-service mode: this process ALSO polls Telegram, so the bot
+                # answers commands here (no separate `run-scheduler` needed).
+                await _runner.bot.run_polling()
+            else:
+                # Web-only mode: just init the HTTP client so alert pushes and the
+                # /api/alerts/test button can SEND. Command polling runs separately
+                # via `python main.py run-scheduler`.
+                await _runner.bot.app.initialize()
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Telegram bot init failed ({}); send disabled.", exc)
+            logger.warning("Telegram bot startup failed ({}); disabling bot.", exc)
             _runner.bot = None
+
+    # Single-service mode also runs the daily refresh + summary scheduler in-process.
+    if settings.enable_background_jobs:
+        from stockstalker.pipeline import DailyScheduler
+
+        _scheduler = DailyScheduler(_runner)
+        _scheduler.start()
+        logger.info("Background jobs enabled — scheduler running inside the API process")
+
+    # Inject the shared runner into the mounted MCP tools (if MCP is mounted).
+    if _mcp_app is not None:
+        from stockstalker.integrations.mcp_server import set_runner
+
+        set_runner(_runner)
+
     logger.info("StockStalker API started")
-    yield
+
+    async with AsyncExitStack() as stack:
+        if _mcp_app is not None:
+            # Run the MCP app's own lifespan (boots its streamable-http manager).
+            await stack.enter_async_context(_mcp_app.lifespan(app))
+            logger.info("MCP server mounted at /mcp")
+        yield
+
+    if _scheduler is not None:
+        try:
+            _scheduler.stop()
+        except Exception:  # noqa: BLE001
+            pass
     if _runner.bot is not None:
         try:
-            await _runner.bot.app.shutdown()
+            if settings.enable_background_jobs:
+                await _runner.bot.stop()
+            else:
+                await _runner.bot.app.shutdown()
         except Exception:  # noqa: BLE001
             pass
     logger.info("StockStalker API shutting down")
@@ -568,15 +619,20 @@ async def get_tickers():
 
 
 @app.post("/api/tickers")
-async def add_ticker(req: AddTickerRequest, background_tasks: BackgroundTasks):
+async def add_ticker(req: AddTickerRequest):
     symbol = req.symbol.strip().upper()
     if not symbol or len(symbol) > 10:
         raise HTTPException(400, "Invalid symbol")
     success = await get_runner().db.add_ticker(symbol)
     if not success:
         raise HTTPException(400, f"{symbol} already exists")
-    background_tasks.add_task(_run_analysis_bg, symbol)
-    return {"success": True, "message": f"{symbol} added. Processing..."}
+    # Kick off the first analysis as a TRACKED job (same mechanism as /api/refresh)
+    # so the UI can poll progress and auto-show the result when it completes.
+    job_id = str(uuid.uuid4())
+    with _jobs_lock:
+        _jobs[job_id] = {"status": "pending", "symbol": symbol, "result": None}
+    asyncio.create_task(_run_job(job_id, symbol))
+    return {"success": True, "job_id": job_id, "message": f"{symbol} added. Analyzing..."}
 
 
 @app.delete("/api/tickers/{symbol}")
@@ -708,7 +764,7 @@ async def create_alert_rule(rule_data: dict):
 
 @app.delete("/api/alerts/rules/{rule_id}")
 async def delete_alert_rule(rule_id: int):
-    await get_runner().db.deactivate_alert_rule(rule_id)
+    await get_runner().db.delete_alert_rule(rule_id)
     return {"success": True}
 
 
@@ -776,17 +832,31 @@ async def _list_mcp_tools() -> list[dict]:
 
 
 @app.get("/api/mcp/status")
-async def mcp_status():
+async def mcp_status(request: Request):
+    tools = await _list_mcp_tools()
+    # Mounted into this API (default): MCP is served at <this origin>/mcp — it's up
+    # whenever the API is up, so report it directly instead of probing a port.
+    if _mcp_app is not None:
+        scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+        return {
+            "running": True,
+            "mode": "mounted",
+            "host": request.url.hostname,
+            "port": request.url.port,
+            "url": f"{scheme}://{request.url.netloc}/mcp",
+            "tools": tools,
+        }
+    # Standalone mode: the MCP server runs as a separate process — probe its port.
     host = settings.mcp_server_host
     port = settings.mcp_server_port
-    # The MCP server runs as a SEPARATE process — probe the port to detect it.
     probe_host = "127.0.0.1" if host in ("0.0.0.0", "") else host
     return {
         "running": await _probe_tcp(probe_host, port),
+        "mode": "standalone",
         "host": host,
         "port": port,
         "url": f"http://{host}:{port}/mcp",
-        "tools": await _list_mcp_tools(),
+        "tools": tools,
     }
 
 
@@ -816,9 +886,7 @@ async def _run_job(job_id: str, symbol: str):
             _jobs[job_id]["result"] = {"error": str(e)}
 
 
-async def _run_analysis_bg(symbol: str):
-    """Fire-and-forget analysis for a freshly-added ticker (errors are logged)."""
-    try:
-        await get_runner().analyze_ticker(symbol)
-    except Exception as e:  # noqa: BLE001 — background task; just log
-        logger.error("Background analysis failed for {}: {}", symbol, e)
+# Mount the MCP app LAST so the explicit API routes above always match first; the
+# catch-all then handles only /mcp (404 for anything else).
+if _mcp_app is not None:
+    app.mount("/", _mcp_app)

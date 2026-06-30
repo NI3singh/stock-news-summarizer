@@ -22,8 +22,10 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    delete,
     insert,
     select,
+    text,
     update,
 )
 from sqlalchemy.exc import IntegrityError
@@ -94,6 +96,8 @@ analyses_t = Table(
     Column("memory_context", Text),
     Column("key_themes", Text),
     Column("technical_signals", Text),
+    Column("composite_sentiment", Float),
+    Column("market_data", Text),
 )
 
 agent_runs_t = Table(
@@ -131,6 +135,14 @@ alert_events_t = Table(
     Column("message", Text),
     Column("delivered", Integer, default=0),
 )
+
+
+# Idempotent ALTERs for pre-existing tables (create_all won't alter existing ones).
+# Each runs in its own transaction; a "duplicate column" error is caught + ignored.
+_MIGRATIONS = [
+    "ALTER TABLE analyses ADD COLUMN composite_sentiment FLOAT",
+    "ALTER TABLE analyses ADD COLUMN market_data TEXT",
+]
 
 
 # --- Engine cache (one per URL; loop-agnostic because NullPool holds no connections) ---
@@ -194,6 +206,14 @@ class DatabaseManager:
         """Create all tables if they do not already exist (idempotent)."""
         async with self._engine.begin() as conn:
             await conn.run_sync(metadata.create_all)
+        # Idempotent column additions for pre-existing tables (each in its own
+        # transaction so a "column already exists" error can't poison the rest).
+        for statement in _MIGRATIONS:
+            try:
+                async with self._engine.begin() as conn:
+                    await conn.execute(text(statement))
+            except Exception:  # noqa: BLE001 — column already exists
+                pass
         logger.debug("Database initialised ({})", self.db_url.split("@")[-1])
 
     async def add_ticker(self, symbol: str) -> bool:
@@ -255,6 +275,11 @@ class DatabaseManager:
             if analysis.quant
             else None
         )
+        market_data = (
+            json.dumps(analysis.quant.market.model_dump(mode="json"))
+            if analysis.quant and analysis.quant.market
+            else None
+        )
         async with self._engine.begin() as conn:
             await conn.execute(
                 insert(analyses_t).values(
@@ -269,6 +294,8 @@ class DatabaseManager:
                     memory_context=memory_context,
                     key_themes=key_themes,
                     technical_signals=technical_signals,
+                    composite_sentiment=analysis.news.composite_sentiment,
+                    market_data=market_data,
                 )
             )
         logger.debug("Analysis saved for {}", ticker)
@@ -311,7 +338,7 @@ class DatabaseManager:
         for row in rows:
             record = dict(row)
             # Best-effort: decode JSON columns back into Python structures.
-            for col in ("articles_used", "memory_context", "key_themes", "technical_signals"):
+            for col in ("articles_used", "memory_context", "key_themes", "technical_signals", "market_data"):
                 if record.get(col):
                     try:
                         record[col] = json.loads(record[col])
@@ -399,11 +426,12 @@ class DatabaseManager:
                 .values(last_triggered_at=_now_iso())
             )
 
-    async def deactivate_alert_rule(self, rule_id: int) -> None:
-        """Soft-delete an alert rule (set is_active = 0)."""
+    async def delete_alert_rule(self, rule_id: int) -> None:
+        """Permanently delete an alert rule (hard delete). Disabling without
+        deleting is a separate action — see set_alert_rule_active()."""
         async with self._engine.begin() as conn:
             await conn.execute(
-                update(alert_rules_t).where(alert_rules_t.c.id == rule_id).values(is_active=0)
+                delete(alert_rules_t).where(alert_rules_t.c.id == rule_id)
             )
 
     async def get_all_alert_rules(self) -> list[AlertRule]:

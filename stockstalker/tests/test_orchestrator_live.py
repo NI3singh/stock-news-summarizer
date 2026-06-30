@@ -58,7 +58,7 @@ async def test_full_orchestrator_pipeline():
     # Step 5 — vector store indexing
     await asyncio.sleep(0.5)
     vs_size = await vs.collection_size()
-    assert vs_size > 0, "Articles should have been indexed in ChromaDB"
+    assert vs_size > 0, "Articles should have been indexed in the vector store"
     print(f"Vector store size: {vs_size}")
 
     # Step 6 — agent_runs log

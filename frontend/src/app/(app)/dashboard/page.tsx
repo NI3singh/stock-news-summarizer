@@ -2,20 +2,21 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { useDashboardStore } from "@/stores/dashboard-store";
-import { useAddTicker, useSummary, useTickers } from "@/hooks/use-tickers";
+import { useSummary, useTickers } from "@/hooks/use-tickers";
+import { useAddAndAnalyze } from "@/hooks/use-refresh";
 import { CenterPanel } from "@/components/dashboard/center-panel";
 import { RightPanel } from "@/components/dashboard/right-panel";
 import { EmptyState } from "@/components/ui/empty-state";
 
 function EmptyWatchlistState() {
-  const addTicker = useAddTicker();
+  const { add } = useAddAndAnalyze();
   const [val, setVal] = useState("");
 
   const submit = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter") return;
     const s = val.trim().toUpperCase();
     if (/^[A-Z]{1,10}$/.test(s)) {
-      addTicker.mutate(s);
+      add(s);
       setVal("");
     }
   };

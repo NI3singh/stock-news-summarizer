@@ -7,9 +7,69 @@ asks the LLM to interpret them alongside the news sentiment.
 import asyncio
 
 from stockstalker.agents.base import BaseAgent
+from stockstalker.llm.client import LLMError
 from stockstalker.llm.prompts import quant_interpret_prompt
-from stockstalker.schemas import AgentContext, AgentResult, QuantAnalysis, TechnicalSignals
+from stockstalker.schemas import (
+    AgentContext,
+    AgentResult,
+    MarketData,
+    QuantAnalysis,
+    TechnicalSignals,
+)
 from stockstalker.utils import logger
+
+
+def _market_data_from_info(info: dict, earnings_date: str | None = None) -> MarketData:
+    """Map a yfinance ``.info`` dict to MarketData (all fields best-effort)."""
+    return MarketData(
+        current_price=info.get("currentPrice") or info.get("regularMarketPrice"),
+        market_cap=info.get("marketCap"),
+        pe_ratio=info.get("trailingPE"),
+        forward_pe=info.get("forwardPE"),
+        beta=info.get("beta"),
+        fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
+        fifty_two_week_low=info.get("fiftyTwoWeekLow"),
+        short_ratio=info.get("shortRatio"),
+        dividend_yield=info.get("dividendYield"),
+        sector=info.get("sector"),
+        industry=info.get("industry"),
+        earnings_date=earnings_date,
+    )
+
+
+def _fetch_market_data_sync(symbol: str) -> MarketData | None:
+    import yfinance as yf
+
+    ticker = yf.Ticker(symbol)
+    info = ticker.info or {}
+    if not info:
+        return None
+
+    earnings_date: str | None = None
+    try:
+        cal = ticker.calendar
+        ed = cal.get("Earnings Date") if isinstance(cal, dict) else None
+        if isinstance(ed, (list, tuple)) and ed:
+            earnings_date = str(ed[0])
+        elif ed:
+            earnings_date = str(ed)
+    except Exception:  # noqa: BLE001 — earnings calendar is optional
+        earnings_date = None
+
+    return _market_data_from_info(info, earnings_date)
+
+
+async def _fetch_market_data(symbol: str) -> MarketData | None:
+    """Fetch fundamentals off-thread, bounded by a timeout. None on any failure."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_fetch_market_data_sync, symbol), timeout=12.0
+        )
+    except Exception as exc:  # noqa: BLE001 — enrichment must never fail the agent
+        logger.warning(
+            "[QuantAgent] market-data enrichment unavailable for {}: {}", symbol, exc
+        )
+        return None
 
 
 class QuantAgent(BaseAgent):
@@ -93,6 +153,9 @@ class QuantAgent(BaseAgent):
             price_change_pct=price_change_pct,
         )
 
+        # --- Step 2.5: market-data enrichment (yfinance fundamentals; best-effort) ---
+        market = await _fetch_market_data(context.ticker)
+
         # --- Step 3: news sentiment from memory ---
         news_sentiment = 0.0
         if context.memory and context.memory.historical_sentiment_trend:
@@ -102,13 +165,26 @@ class QuantAgent(BaseAgent):
             if "negative" in trend:
                 news_sentiment = -0.5
 
-        # --- Step 4: LLM interpretation ---
-        quant_analysis = await self.llm.generate_structured(
-            quant_interpret_prompt(context.ticker, signals, news_sentiment),
-            QuantAnalysis,
-        )
+        # --- Step 4: LLM interpretation (degrade to signals-only if the LLM is down) ---
+        try:
+            quant_analysis = await self.llm.generate_structured(
+                quant_interpret_prompt(context.ticker, signals, news_sentiment),
+                QuantAnalysis,
+            )
+        except LLMError as exc:
+            logger.warning(
+                "[{}] LLM unavailable ({}) — returning technical signals without interpretation",
+                self.name,
+                exc,
+            )
+            quant_analysis = QuantAnalysis(
+                signals=signals,
+                interpretation="AI interpretation unavailable — technical signals only.",
+                correlation_note="",
+            )
         # Use the REAL computed signals, not the LLM's reproduced version.
         quant_analysis.signals = signals
+        quant_analysis.market = market  # enrichment (None if yfinance unavailable)
 
         # --- Step 5 ---
         return AgentResult(

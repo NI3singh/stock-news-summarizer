@@ -15,6 +15,8 @@ export interface Article {
   ticker: string;
   published_at: string | null;
   content: string;
+  credibility_score?: number; // source weight 0..1
+  sentiment_score?: number; // per-article VADER score -1..1
 }
 
 export interface TechnicalSignals {
@@ -25,6 +27,21 @@ export interface TechnicalSignals {
   bb_lower: number | null;
   volume_ratio: number | null;
   price_change_pct: number | null;
+}
+
+export interface MarketData {
+  current_price: number | null;
+  market_cap: number | null;
+  pe_ratio: number | null;
+  forward_pe: number | null;
+  beta: number | null;
+  fifty_two_week_high: number | null;
+  fifty_two_week_low: number | null;
+  short_ratio: number | null;
+  dividend_yield: number | null;
+  sector: string | null;
+  industry: string | null;
+  earnings_date: string | null;
 }
 
 export interface MemoryContext {
@@ -72,6 +89,8 @@ export interface SummaryRow {
   memory_context: MemoryContext | null;
   key_themes: string[] | null;
   technical_signals: TechnicalSignals | null;
+  composite_sentiment: number | null; // credibility-weighted composite
+  market_data: MarketData | null;
 }
 
 export interface SummaryResponse {
@@ -153,8 +172,9 @@ export interface McpTool {
 
 export interface McpStatus {
   running: boolean;
-  host: string;
-  port: number;
+  mode?: "mounted" | "standalone";
+  host?: string;
+  port?: number | null;
   url: string;
   tools: McpTool[];
 }

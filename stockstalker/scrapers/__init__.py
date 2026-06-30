@@ -1,7 +1,8 @@
 """StockStalker v2 scrapers — concurrent multi-source orchestrator.
 
 Runs all source scrapers concurrently (each isolated so one failure can't abort
-the others), flattens, and deduplicates by URL+title.
+the others), flattens, and deduplicates by URL+title. All sources are lightweight
+HTTP (REST APIs + RSS feeds) — no headless browser.
 """
 import asyncio
 import hashlib
@@ -9,17 +10,17 @@ import time
 
 from stockstalker.schemas import Article
 from stockstalker.scrapers.finviz import FinvizScraper
+from stockstalker.scrapers.google_news import GoogleNewsScraper
 from stockstalker.scrapers.polygon import PolygonScraper
-from stockstalker.scrapers.sec_edgar import EdgarScraper
-from stockstalker.scrapers.tradingview import TradingViewScraper
+from stockstalker.scrapers.yahoo_rss import YahooFinanceScraper
 from stockstalker.utils import logger
 
 __all__ = [
     "ScraperOrchestrator",
     "PolygonScraper",
     "FinvizScraper",
-    "TradingViewScraper",
-    "EdgarScraper",
+    "YahooFinanceScraper",
+    "GoogleNewsScraper",
 ]
 
 
@@ -52,8 +53,8 @@ class ScraperOrchestrator:
         async def _run(scraper_cls, name: str, timeout: float) -> list[Article]:
             """Isolated scraper task — never raises; [] on any failure or timeout.
 
-            A per-source timeout keeps one slow source (notably the browser-based
-            TradingView crawl, ~25-30s) from blowing the pipeline's latency budget.
+            A per-source timeout keeps one slow or blocked source from blowing the
+            pipeline's latency budget.
             """
             try:
                 async with scraper_cls() as scraper:
@@ -68,14 +69,14 @@ class ScraperOrchestrator:
         results = await asyncio.gather(
             _run(PolygonScraper, "Polygon", 20.0),
             _run(FinvizScraper, "Finviz", 20.0),
-            _run(TradingViewScraper, "TradingView", 10.0),
-            _run(EdgarScraper, "EDGAR", 20.0),
+            _run(YahooFinanceScraper, "Yahoo Finance", 15.0),
+            _run(GoogleNewsScraper, "Google News", 15.0),
             return_exceptions=False,
         )
 
         all_articles = [article for sublist in results for article in sublist]
         logger.info(
-            "Polygon: {} | Finviz: {} | TradingView: {} | EDGAR: {} | Total raw: {}",
+            "Polygon: {} | Finviz: {} | Yahoo: {} | Google: {} | Total raw: {}",
             len(results[0]),
             len(results[1]),
             len(results[2]),

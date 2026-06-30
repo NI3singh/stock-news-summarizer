@@ -1,9 +1,7 @@
 """StockStalker v2 — scraper layer tests (schema, dedup, isolation, benchmark).
 
-Tests 1 and 4 make REAL network calls and are slow (TradingView launches a
-headless browser). Test 3 mocks the scrapers for a deterministic, fast isolation
-check — necessary because live TradingView/EDGAR currently return [] (selector /
-query issues), so there'd be nothing to assert as "still included" otherwise.
+Tests 1 and 4 make REAL network calls (deselected unless run live). Test 3 mocks
+the scrapers for a deterministic, fast isolation check.
 """
 import time
 
@@ -11,11 +9,11 @@ import pytest
 
 from stockstalker.schemas import Article
 from stockstalker.scrapers import (
-    EdgarScraper,
     FinvizScraper,
+    GoogleNewsScraper,
     PolygonScraper,
     ScraperOrchestrator,
-    TradingViewScraper,
+    YahooFinanceScraper,
 )
 from stockstalker.utils import logger
 
@@ -23,7 +21,7 @@ from stockstalker.utils import logger
 # --- Test 1: Article schema compliance (LIVE) ---
 @pytest.mark.parametrize(
     "scraper_cls",
-    [PolygonScraper, FinvizScraper, TradingViewScraper, EdgarScraper],
+    [PolygonScraper, FinvizScraper, YahooFinanceScraper, GoogleNewsScraper],
 )
 async def test_article_schema_compliance(scraper_cls):
     async with scraper_cls() as scraper:
@@ -67,16 +65,16 @@ async def test_exception_isolation(monkeypatch):
     async def _finviz(self, ticker):
         return [Article(title="Finviz news item", url="https://fv.com/1", source="Finviz (X)", ticker="AAPL")]
 
-    async def _tv(self, ticker):
-        return [Article(title="TradingView news item", url="https://tv.com/1", source="TradingView", ticker="AAPL")]
+    async def _yahoo(self, ticker):
+        return [Article(title="Yahoo headline item", url="https://yh.com/1", source="Yahoo Finance", ticker="AAPL")]
 
-    async def _edgar(self, ticker):
-        return [Article(title="EDGAR filing item", url="https://sec.gov/1", source="SEC EDGAR (8-K)", ticker="AAPL")]
+    async def _google(self, ticker):
+        return [Article(title="Google news item", url="https://gn.com/1", source="Google News (Reuters)", ticker="AAPL")]
 
     monkeypatch.setattr(PolygonScraper, "scrape", _raise)
     monkeypatch.setattr(FinvizScraper, "scrape", _finviz)
-    monkeypatch.setattr(TradingViewScraper, "scrape", _tv)
-    monkeypatch.setattr(EdgarScraper, "scrape", _edgar)
+    monkeypatch.setattr(YahooFinanceScraper, "scrape", _yahoo)
+    monkeypatch.setattr(GoogleNewsScraper, "scrape", _google)
 
     result = await ScraperOrchestrator().scrape_all("AAPL")
 
@@ -85,8 +83,8 @@ async def test_exception_isolation(monkeypatch):
     sources = {a.source for a in result}
     # The other three scrapers still ran and contributed.
     assert any(s.startswith("Finviz") for s in sources)
-    assert any(s == "TradingView" for s in sources)
-    assert any(s.startswith("SEC EDGAR") for s in sources)
+    assert any(s.startswith("Yahoo") for s in sources)
+    assert any(s.startswith("Google") for s in sources)
     # Polygon raised -> contributed nothing.
     assert not any(s.startswith("Polygon") for s in sources)
 

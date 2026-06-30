@@ -34,8 +34,15 @@ def _embed_sync(texts: list[str], task_type: str) -> list[list[float]]:
     """
     from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+    # output_dimensionality is REQUIRED: gemini-embedding-001 defaults to 3072 dims,
+    # but the pgvector column (and the SQLite JSON path) are sized to EMBED_DIM. Without
+    # this, every insert/query silently fails on Postgres with a dimension mismatch.
+    # Cosine search (pgvector '<=>' and the Python _cosine) is scale-invariant, so the
+    # truncated (un-normalized) Matryoshka vectors need no extra normalization.
     embedder = GoogleGenerativeAIEmbeddings(
-        model=EMBED_MODEL, google_api_key=settings.gemini_api_key
+        model=EMBED_MODEL,
+        google_api_key=settings.gemini_api_key,
+        output_dimensionality=EMBED_DIM,
     )
     if task_type == "retrieval_query":
         return [embedder.embed_query(t) for t in texts]

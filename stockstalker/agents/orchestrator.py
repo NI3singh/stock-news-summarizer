@@ -16,6 +16,7 @@ from stockstalker.agents.base import BaseAgent
 from stockstalker.agents.memory_agent import MemoryAgent
 from stockstalker.agents.news_agent import NewsAgent
 from stockstalker.agents.quant_agent import QuantAgent
+from stockstalker.llm.client import LLMError
 from stockstalker.llm.prompts import synthesis_prompt
 from stockstalker.schemas import (
     AgentContext,
@@ -29,6 +30,27 @@ from stockstalker.utils import logger
 if TYPE_CHECKING:  # type-only — set at runtime via set_notifiers()
     from stockstalker.integrations.alert_engine import AlertEngine
     from stockstalker.integrations.telegram import StockStalkerBot
+
+
+def _fallback_synthesis(ticker: str, news: NewsAnalysis, quant) -> str:
+    """Build a final_synthesis without the LLM (used when the model is unreachable)."""
+    parts = [f"{ticker}: rule-based summary (AI model unavailable)."]
+    if news.summary:
+        parts.append(news.summary)
+    if quant is not None and quant.signals is not None:
+        s = quant.signals
+        bits = []
+        if s.rsi is not None:
+            bits.append(f"RSI {s.rsi}")
+        if s.macd is not None:
+            bits.append(f"MACD {s.macd}")
+        if s.volume_ratio is not None:
+            bits.append(f"Vol {s.volume_ratio}x")
+        if s.price_change_pct is not None:
+            bits.append(f"Change {s.price_change_pct}%")
+        if bits:
+            parts.append("Signals: " + ", ".join(bits) + ".")
+    return " ".join(parts).strip()
 
 
 class OrchestratorAgent(BaseAgent):
@@ -72,12 +94,29 @@ class OrchestratorAgent(BaseAgent):
             news_analysis = news_result.data if news_result.success else NewsAnalysis()
             quant_analysis = quant_result.data if quant_result.success else None
 
-            ticker_analysis = await self.llm.generate_structured(
-                synthesis_prompt(
-                    context.ticker, news_analysis, quant_analysis, context.memory
-                ),
-                TickerAnalysis,
-            )
+            try:
+                ticker_analysis = await self.llm.generate_structured(
+                    synthesis_prompt(
+                        context.ticker, news_analysis, quant_analysis, context.memory
+                    ),
+                    TickerAnalysis,
+                )
+            except LLMError as exc:
+                # LLM unreachable — build a degraded report so the run still produces
+                # (and persists) a usable analysis from the VADER news + signals.
+                logger.warning(
+                    "[{}] Synthesis LLM unavailable ({}) — using a rule-based summary",
+                    self.name,
+                    exc,
+                )
+                ticker_analysis = TickerAnalysis(
+                    ticker=context.ticker,
+                    news=news_analysis,
+                    memory=context.memory,
+                    final_synthesis=_fallback_synthesis(
+                        context.ticker, news_analysis, quant_analysis
+                    ),
+                )
             # The LLM only supplies final_synthesis reliably — force the structured
             # fields to the real objects we already have.
             ticker_analysis.ticker = context.ticker
@@ -91,12 +130,21 @@ class OrchestratorAgent(BaseAgent):
             # --- Step D: Persist (indexing articles closes the RAG loop) ---
             logger.info("[{}] Step D: Persisting results", self.name)
             await self.db.save_analysis(context.ticker, ticker_analysis)
-            await self.vector_store.add_articles(news_analysis.selected_articles)
-            logger.info(
-                "[{}] Indexed {} articles to vector store",
-                self.name,
-                len(news_analysis.selected_articles),
-            )
+            # Vector indexing is best-effort: embeddings need the LLM provider, so a
+            # provider outage must not fail an already-saved analysis.
+            try:
+                await self.vector_store.add_articles(news_analysis.selected_articles)
+                logger.info(
+                    "[{}] Indexed {} articles to vector store",
+                    self.name,
+                    len(news_analysis.selected_articles),
+                )
+            except Exception as exc:  # noqa: BLE001 — indexing must not fail the run
+                logger.warning(
+                    "[{}] Vector indexing skipped (embeddings unavailable): {}",
+                    self.name,
+                    exc,
+                )
 
             # --- Step E: Fire alerts (best-effort; never fails a saved analysis) ---
             if self.alert_engine and self.bot:

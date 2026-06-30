@@ -9,7 +9,6 @@ NOTE: the DB tests use a pytest ``tmp_path`` file rather than ``:memory:`` —
 ``aiosqlite.connect(":memory:")`` is a separate, throwaway in-memory database,
 so tables created in ``init_db()`` would not survive to the next call.
 """
-import shutil
 import time
 
 import aiosqlite
@@ -84,26 +83,29 @@ async def test_ticker_crud(tmp_path):
     assert "AAPL" not in await db.get_active_tickers()
 
 
-async def test_vectorstore_init(tmp_path):
+async def test_vectorstore_init(tmp_path, monkeypatch):
     """Test 5 — VectorStore starts empty, accepts an article, reports size."""
-    persist = str(tmp_path / "chroma")
-    try:
-        vs = VectorStore(persist_path=persist)
-        assert await vs.collection_size() == 0
-        await vs.add_articles(
-            [
-                Article(
-                    title="Test article",
-                    url="https://example.com/x",
-                    source="Test",
-                    ticker="AAPL",
-                    content="A sufficiently long article body for embedding.",
-                )
-            ]
-        )
-        assert await vs.collection_size() == 1
-    finally:
-        shutil.rmtree(persist, ignore_errors=True)
+    from stockstalker.memory import vector_store as vs_mod
+
+    async def _fake_embed(texts, task_type):  # keep this foundation test offline/fast
+        return [[0.1] * vs_mod.EMBED_DIM for _ in texts]
+
+    monkeypatch.setattr(vs_mod, "_embed", _fake_embed)
+
+    vs = VectorStore(db_url=str(tmp_path / "vec.db"))  # local SQLite (JSON-cosine path)
+    assert await vs.collection_size() == 0
+    await vs.add_articles(
+        [
+            Article(
+                title="Test article",
+                url="https://example.com/x",
+                source="Test",
+                ticker="AAPL",
+                content="A sufficiently long article body for embedding.",
+            )
+        ]
+    )
+    assert await vs.collection_size() == 1
 
 
 def test_all_models_instantiate():

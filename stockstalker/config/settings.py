@@ -5,8 +5,25 @@ file and validated once, at import time, via the module-level ``settings``
 singleton. If a required API key is absent, importing this module fails fast
 with a clear, actionable error.
 """
+from pathlib import Path
+
+from dotenv import load_dotenv
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Absolute path to the project-root .env (this file is stockstalker/config/settings.py).
+_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
+
+# Load it with override=True BEFORE Settings is built, so the .env values WIN over
+# any stale shell/OS environment variable. A leftover GEMINI_API_KEY holding an
+# "AQ.*" OAuth token (e.g. injected by a shell profile or gcloud) is the classic
+# cause of Gemini "401 UNAUTHENTICATED / ACCESS_TOKEN_TYPE_UNSUPPORTED": by default
+# pydantic-settings AND os.environ readers (the LLM client reads GEMINI_API_KEY
+# directly) prefer the OS var over .env, so the wrong key gets used. Loading here
+# also makes the key resolve no matter which directory the app is launched from.
+# On a host with no .env file this is a harmless no-op — the platform's real
+# environment variables are used.
+load_dotenv(_ENV_PATH, override=True)
 
 
 class Settings(BaseSettings):
@@ -31,6 +48,10 @@ class Settings(BaseSettings):
     #   https://stockstalker.onrender.com,https://stockstalker.vercel.app
     frontend_origin: str | None = None
     max_concurrent_tickers: int = 3
+    # News sentiment engine: "llm" (Gemini; default) or "vader" (rule-based, no
+    # network). With "llm", the NewsAgent automatically falls back to VADER when
+    # the model is unreachable, so analysis still yields a sentiment score.
+    sentiment_engine: str = "llm"
 
     # LLM client configuration (consumed by the stockstalker.llm factory; env-overridable).
     llm_provider: str = "google"
@@ -48,12 +69,23 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
 
-    # MCP server (Phase C) — host/port for the FastMCP server (optional).
+    # Run the Telegram bot poller + daily scheduler INSIDE the API process, so a
+    # single `main.py api` service does everything (web + bot + scheduled jobs).
+    # Leave False to run them separately via `main.py run-scheduler`. Set True for a
+    # one-service deployment (e.g. a single free web host). Do NOT also run
+    # `run-scheduler` when this is True — two pollers conflict on one bot token.
+    enable_background_jobs: bool = False
+
+    # MCP server (Phase C) — host/port for the standalone FastMCP server (optional).
     mcp_server_host: str = "127.0.0.1"
     mcp_server_port: int = 8765
+    # Mount the MCP server onto the API at /mcp (single-service). True = the API also
+    # serves MCP (no separate process). Set False to only run MCP standalone via
+    # `main.py mcp-server` / `run-scheduler --with-mcp`.
+    enable_mcp: bool = True
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_PATH),
         case_sensitive=False,
         extra="ignore",
     )
