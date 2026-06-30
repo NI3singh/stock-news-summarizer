@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 type TestState = "idle" | "testing" | "ok" | "error";
 
 function KeyCard({ title, link }: { title: string; link: string }) {
