@@ -249,10 +249,23 @@ class DatabaseManager:
                 if row.is_active == 1:
                     logger.debug("Ticker {} already tracked by {}", symbol, user_id)
                     return False
+                # Re-adding a previously-REMOVED ticker is a FRESH start: wipe its
+                # old analyses + agent-run history for this user so the dashboard and
+                # History restart clean (the caller then kicks off a new analysis).
+                await conn.execute(
+                    delete(analyses_t).where(
+                        analyses_t.c.user_id == user_id, analyses_t.c.ticker == symbol
+                    )
+                )
+                await conn.execute(
+                    delete(agent_runs_t).where(
+                        agent_runs_t.c.user_id == user_id, agent_runs_t.c.ticker == symbol
+                    )
+                )
                 await conn.execute(
                     update(tickers_t).where(tickers_t.c.id == row.id).values(is_active=1)
                 )
-                logger.debug("Ticker {} reactivated for {}", symbol, user_id)
+                logger.debug("Ticker {} reactivated (fresh start) for {}", symbol, user_id)
                 return True
             await conn.execute(insert(tickers_t).values(user_id=user_id, symbol=symbol))
         logger.debug("Ticker {} added for {}", symbol, user_id)

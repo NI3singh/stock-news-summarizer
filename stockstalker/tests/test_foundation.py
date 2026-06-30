@@ -87,6 +87,24 @@ async def test_ticker_crud(tmp_path):
     assert "AAPL" in await db.get_active_tickers("user-2")  # unaffected
 
 
+async def test_readd_removed_ticker_starts_fresh(tmp_path):
+    """Test 4b — re-adding a REMOVED ticker reactivates it AND wipes its old
+    analysis history, so it starts fresh (per the 'remove then add = fresh' rule)."""
+    uid = "user-fresh"
+    db = DatabaseManager(db_path=str(tmp_path / "fresh.db"))
+    await db.init_db()
+    assert await db.add_ticker(uid, "NVDA") is True
+    await db.save_analysis(
+        uid, "NVDA", TickerAnalysis(ticker="NVDA", news=NewsAnalysis(), memory=MemoryContext())
+    )
+    assert len(await db.get_all_analyses(uid, "NVDA")) == 1
+    await db.deactivate_ticker(uid, "NVDA")
+    # Re-adding the removed ticker succeeds (reactivates) AND clears prior history.
+    assert await db.add_ticker(uid, "NVDA") is True
+    assert "NVDA" in await db.get_active_tickers(uid)
+    assert await db.get_all_analyses(uid, "NVDA") == []
+
+
 async def test_vectorstore_init(tmp_path, monkeypatch):
     """Test 5 — VectorStore starts empty, accepts an article, reports size."""
     from stockstalker.memory import vector_store as vs_mod
