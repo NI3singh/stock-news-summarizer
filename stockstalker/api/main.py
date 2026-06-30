@@ -110,7 +110,11 @@ app = FastAPI(title="StockStalker API", version="2.0.0", lifespan=lifespan)
 # Local dev origins + any production frontend origin(s) from FRONTEND_ORIGIN.
 _cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
 if settings.frontend_origin:
-    _cors_origins += [o.strip() for o in settings.frontend_origin.split(",") if o.strip()]
+    # rstrip("/") — a browser's Origin header never has a trailing slash, so an
+    # entry like "https://app.onrender.com/" would never match and CORS would block.
+    _cors_origins += [
+        o.strip().rstrip("/") for o in settings.frontend_origin.split(",") if o.strip()
+    ]
 
 app.add_middleware(
     CORSMiddleware,
